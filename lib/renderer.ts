@@ -4,7 +4,7 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
 import { randomUUID } from 'crypto'
-import type { ResumeData, WorkExperience, Education, Project } from './extractor'
+import type { ResumeData, WorkExperience, Position, Education, Project } from './extractor'
 
 const execFileAsync = promisify(execFile)
 
@@ -14,10 +14,24 @@ const execFileAsync = promisify(execFile)
 
 /**
  * Single-pass escape of all LaTeX special characters.
- * Using a single regex pass so substituted text is never re-processed.
+ * Sanitizes Unicode first: converts common typographic characters to LaTeX/ASCII
+ * equivalents and strips characters outside the Latin Extended-B range (U+024F)
+ * that pdflatex cannot render.  Accented Latin chars (é, ü, ñ…) are preserved
+ * because template.tex loads utf8 inputenc + T1 fontenc.
  */
 function escapeTex(s: string): string {
-  return s.replace(/[\\{}&%$#_~^]/g, (char) => {
+  const sanitized = s
+    .replace(/\u00A0/g, ' ')                          // non-breaking space
+    .replace(/[\u2018\u2019\u02BC]/g, "'")            // smart single quotes / modifier apostrophe
+    .replace(/[\u201C\u201D]/g, '"')                  // smart double quotes
+    .replace(/\u2014/g, '---')                        // em dash → LaTeX ---
+    .replace(/[\u2013\u2012\u2015]/g, '--')           // en dash / figure dash → LaTeX --
+    .replace(/\u2026/g, '...')                        // ellipsis
+    .replace(/[\u2022\u2023\u2043\u2219\u25CF]/g, '-') // bullet variants → hyphen
+    .replace(/\u2212/g, '-')                          // minus sign
+    .replace(/[\u0250-\uFFFF]/g, '')                  // strip non-Latin scripts (CJK, Arabic, etc.)
+
+  return sanitized.replace(/[\\{}&%$#_~^]/g, (char) => {
     switch (char) {
       case '\\': return '\\textbackslash{}'
       case '{':  return '\\{'
@@ -65,20 +79,46 @@ function generateSummarySection(summary: string | undefined): string {
 ${escapeTex(summary.trim())}`
 }
 
+function renderBullets(bullets: string[]): string {
+  if (bullets.length === 0) return ''
+  return `      \\resumeItemListStart
+${bullets.map((b) => `        \\resumeItem{${escapeTex(b)}}`).join('\n')}
+      \\resumeItemListEnd`
+}
+
+function renderPosition(pos: Position): string {
+  const loc = pos.location ? ` $|$ ${escapeTex(pos.location)}` : ''
+  return `    \\resumeSubSubheading
+      {${escapeTex(pos.title)}${loc}}{${escapeTex(pos.start_date)} -- ${escapeTex(pos.end_date)}}
+${renderBullets(pos.bullets)}`
+}
+
 function generateExperienceSection(jobs: WorkExperience[]): string {
   if (jobs.length === 0) return ''
 
   const items = jobs.map((job) => {
-    const bullets = job.bullets.length > 0
-      ? `      \\resumeItemListStart
-${job.bullets.map((b) => `        \\resumeItem{${escapeTex(b)}}`).join('\n')}
-      \\resumeItemListEnd`
-      : ''
+    const first = job.positions[0]
+    if (!first) return ''
 
-    return `    \\resumeSubheading
-      {${escapeTex(job.company)}}{${escapeTex(job.start_date)} -- ${escapeTex(job.end_date)}}
-      {${escapeTex(job.title)}}{${escapeTex(job.location ?? '')}}
-${bullets}`
+    if (job.positions.length === 1) {
+      // Single position — classic two-line subheading
+      return `    \\resumeSubheading
+      {${escapeTex(job.company)}}{${escapeTex(first.start_date)} -- ${escapeTex(first.end_date)}}
+      {${escapeTex(first.title)}}{${escapeTex(first.location ?? job.location ?? '')}}
+${renderBullets(first.bullets)}`
+    }
+
+    // Multiple positions — company header, then each position as a sub-sub-heading
+    const firstStart = job.positions[job.positions.length - 1]?.start_date ?? first.start_date
+    const lastEnd = first.end_date
+
+    const companyHeader = `    \\resumeSubheading
+      {${escapeTex(job.company)}}{${escapeTex(firstStart)} -- ${escapeTex(lastEnd)}}
+      {}{}`
+
+    const positionItems = job.positions.map(renderPosition).join('\n')
+
+    return `${companyHeader}\n${positionItems}`
   })
 
   return `\\section{Experience}

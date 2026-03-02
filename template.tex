@@ -5,6 +5,8 @@
 % -----------------------------------------------
 \documentclass[letterpaper,11pt]{article}
 
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
 \usepackage[hidelinks]{hyperref}
 
 % Margins (no geometry / fullpage needed)
@@ -46,6 +48,14 @@
     \textbf{#1} & \small #2 \\%
     \textit{\small #3} & \textit{\small #4} \\%
   \end{tabular*}\vspace{-3pt}%
+}
+
+% Used for additional positions within the same company
+\newcommand{\resumeSubSubheading}[2]{%
+  \vspace{-4pt}\item[]%
+  \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}%
+    \textit{\small #1} & \textit{\small #2} \\%
+  \end{tabular*}\vspace{-5pt}%
 }
 
 \newcommand{\resumeProjectHeading}[2]{%

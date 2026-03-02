@@ -5,29 +5,39 @@ import type { ResumeData } from '@/lib/extractor'
 
 type Step = 'upload' | 'describe' | 'download'
 
+// Returns the flat position index across all companies.
+// positions are ordered: company[0].positions[0], [1], ..., company[1].positions[0], ...
+function flatIndex(resumeData: ResumeData, companyIdx: number, positionIdx: number): number {
+  let idx = 0
+  for (let c = 0; c < companyIdx; c++) {
+    idx += resumeData.work_experience[c].positions.length
+  }
+  return idx + positionIdx
+}
+
 export default function Home() {
   const [step, setStep] = useState<Step>('upload')
 
-  // Step 1 state
+  // Step 1
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Step 2 state
+  // Step 2
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
+  // Flat array — one entry per position across all companies
   const [descriptions, setDescriptions] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
 
-  // Step 3 state
+  // Step 3
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [downloadName, setDownloadName] = useState<string>('resume.pdf')
 
-  // Shared error
   const [error, setError] = useState<string | null>(null)
 
   // -------------------------------------------------------------------------
-  // Step 1 helpers
+  // Step 1
   // -------------------------------------------------------------------------
 
   const setFileIfPdf = (f: File) => {
@@ -60,19 +70,17 @@ export default function Home() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/extract', {
-        method: 'POST',
-        body: formData,
-      })
+      const response = await fetch('/api/extract', { method: 'POST', body: formData })
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error ?? `Server error: ${response.status}`)
+        throw new Error((data as { error?: string }).error ?? `Server error: ${response.status}`)
       }
 
       const data: ResumeData = await response.json()
+      const totalPositions = data.work_experience.reduce((acc, c) => acc + c.positions.length, 0)
       setResumeData(data)
-      setDescriptions(data.work_experience.map(() => ''))
+      setDescriptions(Array(totalPositions).fill(''))
       setStep('describe')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
@@ -82,8 +90,16 @@ export default function Home() {
   }
 
   // -------------------------------------------------------------------------
-  // Step 2 helpers
+  // Step 2
   // -------------------------------------------------------------------------
+
+  const setDescription = (flatIdx: number, value: string) => {
+    setDescriptions((prev) => {
+      const next = [...prev]
+      next[flatIdx] = value
+      return next
+    })
+  }
 
   const handleGenerate = async () => {
     if (!resumeData) return
@@ -155,10 +171,7 @@ export default function Home() {
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
               }`}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragging(true)
-              }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}
@@ -209,8 +222,7 @@ export default function Home() {
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Extracting from LinkedIn…
                 </span>
@@ -226,34 +238,64 @@ export default function Home() {
         {/* ------------------------------------------------------------------ */}
         {step === 'describe' && resumeData && (
           <>
-            <p className="text-gray-600 mb-6 text-sm">
-              Describe what you did in each role. Gemini will turn your notes into polished bullet points.
-              Leave a field blank and it will infer from the job title.
+            <p className="text-gray-500 text-sm mb-6">
+              Describe what you did in each role — Gemini will turn your notes into polished bullet
+              points. Leave a field blank and it will infer from the job title. Anything Gemini
+              already found on your LinkedIn profile is shown in grey.
             </p>
 
-            <div className="space-y-4">
-              {resumeData.work_experience.map((job, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                  <div className="mb-3">
-                    <p className="font-semibold text-gray-900">{job.title}</p>
-                    <p className="text-gray-600 text-sm">{job.company}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">
-                      {job.start_date} – {job.end_date}
-                    </p>
+            <div className="space-y-5">
+              {resumeData.work_experience.map((company, ci) => (
+                <div
+                  key={ci}
+                  className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+                >
+                  {/* Company header */}
+                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                    <p className="font-semibold text-gray-900">{company.company}</p>
+                    {company.location && (
+                      <p className="text-gray-400 text-xs mt-0.5">{company.location}</p>
+                    )}
                   </div>
-                  <textarea
-                    className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
-                      placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400
-                      focus:border-transparent transition"
-                    rows={3}
-                    placeholder="Describe your responsibilities and achievements…"
-                    value={descriptions[i]}
-                    onChange={(e) => {
-                      const next = [...descriptions]
-                      next[i] = e.target.value
-                      setDescriptions(next)
-                    }}
-                  />
+
+                  {/* Positions */}
+                  <div className="divide-y divide-gray-100">
+                    {company.positions.map((pos, pi) => {
+                      const fi = flatIndex(resumeData, ci, pi)
+                      return (
+                        <div key={pi} className="px-5 py-4">
+                          {/* Position meta */}
+                          <div className="flex flex-wrap items-baseline gap-x-2 mb-2">
+                            <span className="font-medium text-gray-800 text-sm">{pos.title}</span>
+                            {pos.location && (
+                              <span className="text-gray-400 text-xs">· {pos.location}</span>
+                            )}
+                            <span className="text-gray-400 text-xs ml-auto">
+                              {pos.start_date} – {pos.end_date}
+                            </span>
+                          </div>
+
+                          {/* LinkedIn description (context) */}
+                          {pos.linkedin_description && (
+                            <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
+                              {pos.linkedin_description}
+                            </p>
+                          )}
+
+                          {/* User description textarea */}
+                          <textarea
+                            className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
+                              placeholder-gray-400 resize-none focus:outline-none focus:ring-2
+                              focus:ring-blue-400 focus:border-transparent transition"
+                            rows={3}
+                            placeholder="Describe your responsibilities and achievements…"
+                            value={descriptions[fi]}
+                            onChange={(e) => setDescription(fi, e.target.value)}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -277,8 +319,7 @@ export default function Home() {
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     Generating Resume…
                   </span>
