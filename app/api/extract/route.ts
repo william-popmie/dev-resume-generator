@@ -35,6 +35,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(resumeData)
   } catch (err: unknown) {
     console.error('[/api/extract] Error:', err)
+
+    const code =
+      (err as { status?: number; code?: number })?.status ??
+      (err as { status?: number; code?: number })?.code
+    if (code === 429) {
+      return NextResponse.json(
+        { error: 'Gemini API rate limit reached. Please wait a moment and try again.' },
+        { status: 429 },
+      )
+    }
+
     const message = err instanceof Error ? err.message : 'Internal server error'
 
     if (message.includes('Gemini')) {

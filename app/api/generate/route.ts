@@ -6,6 +6,8 @@ import { z } from 'zod'
 
 const RequestBodySchema = z.object({
   resumeData: ResumeDataSchema,
+  // Flat array of descriptions — one per position, ordered by
+  // work_experience[0].positions[0], [1], ..., work_experience[1].positions[0], ...
   descriptions: z.array(z.string()),
 })
 
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
       return new Response('Invalid JSON body', { status: 400 })
     }
 
-    // 2. Validate body shape
+    // 2. Validate
     let resumeData: z.infer<typeof ResumeDataSchema>
     let descriptions: string[]
     try {
@@ -32,30 +34,46 @@ export async function POST(request: NextRequest) {
       return new Response('Invalid request body', { status: 400 })
     }
 
-    // 3. Generate bullet points for all roles
-    const bullets = await generateBulletPoints(resumeData.work_experience, descriptions)
+    // 3. Flatten all positions into bullet-gen entries (same order as descriptions[])
+    let flatIdx = 0
+    const entries = resumeData.work_experience.flatMap((company) =>
+      company.positions.map((pos) => ({
+        company: company.company,
+        title: pos.title,
+        start: pos.start_date,
+        end: pos.end_date,
+        description: descriptions[flatIdx++] ?? '',
+      })),
+    )
 
-    // 4. Merge bullets into resumeData
+    // 4. Generate bullet points for all positions in one Gemini call
+    const bullets = await generateBulletPoints(entries)
+
+    // 5. Re-nest bullets back into the data structure
+    let bulletIdx = 0
     const enriched = {
       ...resumeData,
-      work_experience: resumeData.work_experience.map((job, i) => ({
-        ...job,
-        bullets: bullets[i] ?? [],
+      work_experience: resumeData.work_experience.map((company) => ({
+        ...company,
+        positions: company.positions.map((pos) => ({
+          ...pos,
+          bullets: bullets[bulletIdx++] ?? [],
+        })),
       })),
     }
 
-    // 5. Compile LaTeX to PDF
+    // 6. Compile LaTeX to PDF
     const result = await renderAndCompile(enriched)
     cleanup = result.cleanup
 
-    // 6. Read compiled PDF
+    // 7. Read compiled PDF
     const pdfBytes = await fs.readFile(result.pdfPath)
 
-    // 7. Clean up temp files
+    // 8. Clean up temp files
     await cleanup()
     cleanup = undefined
 
-    // 8. Build a safe filename
+    // 9. Build a safe filename
     const safeName =
       resumeData.full_name
         .replace(/[^a-zA-Z0-9\s]/g, '')
@@ -88,10 +106,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (message.includes('Invalid JSON') || message.includes('ZodError')) {
-      return new Response(
-        'Failed to generate resume. Please try again.',
-        { status: 422 },
-      )
+      return new Response('Failed to generate resume. Please try again.', {
+        status: 422,
+      })
     }
 
     return new Response(message, { status: 500 })
