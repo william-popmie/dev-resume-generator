@@ -1,0 +1,94 @@
+% -----------------------------------------------
+% Minimal resume template — zero tlmgr installs.
+% Only hyperref is used; it ships with BasicTeX
+% (collection-latexrecommended).
+% -----------------------------------------------
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage[hidelinks]{hyperref}
+
+% Margins (no geometry / fullpage needed)
+\setlength{\oddsidemargin}{-0.5in}
+\setlength{\evensidemargin}{-0.5in}
+\setlength{\textwidth}{7.5in}
+\setlength{\topmargin}{-0.6in}
+\setlength{\textheight}{10.2in}
+\setlength{\headheight}{0pt}
+\setlength{\headsep}{0pt}
+\setlength{\footskip}{20pt}
+\setlength{\tabcolsep}{0in}
+
+\pagestyle{empty}
+\raggedbottom
+\raggedright
+
+% ATS-friendly Unicode mapping (part of pdflatex base)
+\input{glyphtounicode}
+\pdfgentounicode=1
+
+% ---- Section heading with rule (no titlesec needed) ----
+\renewcommand{\section}[1]{%
+  \vspace{6pt}%
+  {\large\bfseries\scshape #1}%
+  \par\nobreak\vspace{-4pt}%
+  \noindent\rule{\linewidth}{0.4pt}%
+  \vspace{2pt}\par%
+}
+
+% ---- Resume commands ----
+\newcommand{\resumeItem}[1]{%
+  \item\small{#1\vspace{-2pt}}%
+}
+
+\newcommand{\resumeSubheading}[4]{%
+  \vspace{-2pt}\item[]%
+  \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}%
+    \textbf{#1} & \small #2 \\%
+    \textit{\small #3} & \textit{\small #4} \\%
+  \end{tabular*}\vspace{-7pt}%
+}
+
+\newcommand{\resumeProjectHeading}[2]{%
+  \item[]%
+  \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}%
+    \small #1 & \small #2 \\%
+  \end{tabular*}\vspace{-7pt}%
+}
+
+% Built-in \list instead of enumitem
+\newcommand{\resumeSubHeadingListStart}{%
+  \begin{list}{}{%
+    \setlength{\leftmargin}{0pt}%
+    \setlength{\itemsep}{0pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\topsep}{2pt}%
+  }%
+}
+\newcommand{\resumeSubHeadingListEnd}{\end{list}}
+
+\newcommand{\resumeItemListStart}{%
+  \begin{list}{\textbullet}{%
+    \setlength{\leftmargin}{1.5em}%
+    \setlength{\itemsep}{0pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\topsep}{2pt}%
+  }%
+}
+\newcommand{\resumeItemListEnd}{\end{list}\vspace{-5pt}}
+
+% -----------------------------------------------
+\begin{document}
+
+%%HEADER%%
+
+%%SUMMARY_SECTION%%
+
+%%EXPERIENCE_SECTION%%
+
+%%EDUCATION_SECTION%%
+
+%%PROJECTS_SECTION%%
+
+%%SKILLS_SECTION%%
+
+\end{document}
