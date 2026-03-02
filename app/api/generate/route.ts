@@ -1,63 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import * as fs from 'fs/promises'
-import { extractResumeData } from '@/lib/extractor'
+import { ResumeDataSchema, generateBulletPoints } from '@/lib/extractor'
 import { renderAndCompile } from '@/lib/renderer'
+import { z } from 'zod'
 
-const MAX_SIZE_BYTES = 20 * 1024 * 1024 // 20 MB
+const RequestBodySchema = z.object({
+  resumeData: ResumeDataSchema,
+  descriptions: z.array(z.string()),
+})
 
 export async function POST(request: NextRequest) {
   let cleanup: (() => Promise<void>) | undefined
 
   try {
-    // 1. Parse multipart form data
-    let formData: FormData
+    // 1. Parse JSON body
+    let body: unknown
     try {
-      formData = await request.formData()
+      body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+      return new Response('Invalid JSON body', { status: 400 })
     }
 
-    const file = formData.get('file')
-    if (!file || !(file instanceof File)) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+    // 2. Validate body shape
+    let resumeData: z.infer<typeof ResumeDataSchema>
+    let descriptions: string[]
+    try {
+      const parsed = RequestBodySchema.parse(body)
+      resumeData = parsed.resumeData
+      descriptions = parsed.descriptions
+    } catch {
+      return new Response('Invalid request body', { status: 400 })
     }
 
-    // 2. Validate file type
-    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      return NextResponse.json({ error: 'File must be a PDF' }, { status: 400 })
+    // 3. Generate bullet points for all roles
+    const bullets = await generateBulletPoints(resumeData.work_experience, descriptions)
+
+    // 4. Merge bullets into resumeData
+    const enriched = {
+      ...resumeData,
+      work_experience: resumeData.work_experience.map((job, i) => ({
+        ...job,
+        bullets: bullets[i] ?? [],
+      })),
     }
 
-    // 3. Validate file size
-    if (file.size > MAX_SIZE_BYTES) {
-      return NextResponse.json({ error: 'File exceeds 20 MB limit' }, { status: 413 })
-    }
-
-    if (file.size === 0) {
-      return NextResponse.json({ error: 'File is empty' }, { status: 400 })
-    }
-
-    // 4. Read file into buffer
-    const buffer = Buffer.from(await file.arrayBuffer())
-
-    // 5. Extract structured data from PDF via Gemini
-    const resumeData = await extractResumeData(buffer, file.name)
-
-    // 6. Generate LaTeX and compile to PDF
-    const result = await renderAndCompile(resumeData)
+    // 5. Compile LaTeX to PDF
+    const result = await renderAndCompile(enriched)
     cleanup = result.cleanup
 
-    // 7. Read compiled PDF
+    // 6. Read compiled PDF
     const pdfBytes = await fs.readFile(result.pdfPath)
 
-    // 8. Clean up temp files
+    // 7. Clean up temp files
     await cleanup()
     cleanup = undefined
 
-    // 9. Build a safe filename
-    const safeName = resumeData.full_name
-      .replace(/[^a-zA-Z0-9\s]/g, '')
-      .trim()
-      .replace(/\s+/g, '_') || 'Resume'
+    // 8. Build a safe filename
+    const safeName =
+      resumeData.full_name
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .trim()
+        .replace(/\s+/g, '_') || 'Resume'
 
     return new Response(pdfBytes, {
       status: 200,
@@ -68,7 +71,6 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (err: unknown) {
-    // Ensure cleanup happens even on error
     if (cleanup) {
       await cleanup().catch(() => {})
     }
@@ -77,7 +79,6 @@ export async function POST(request: NextRequest) {
 
     const message = err instanceof Error ? err.message : 'Internal server error'
 
-    // Distinguish user-facing errors from internal ones
     if (
       message.includes('pdflatex') ||
       message.includes('template.tex') ||
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     if (message.includes('Invalid JSON') || message.includes('ZodError')) {
       return new Response(
-        'Failed to parse resume data from PDF. Please try a different export.',
+        'Failed to generate resume. Please try again.',
         { status: 422 },
       )
     }

@@ -1,12 +1,15 @@
-import { GoogleGenAI } from '@google/genai'
-import { z } from 'zod'
+import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Zod Schemas
 // ---------------------------------------------------------------------------
 
 // Gemini returns `null` for absent optional strings; normalise to `undefined`.
-const optStr = z.string().nullish().transform((v) => v ?? undefined)
+const optStr = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? undefined);
 
 const WorkExperienceSchema = z.object({
   company: z.string(),
@@ -15,7 +18,7 @@ const WorkExperienceSchema = z.object({
   start_date: z.string(),
   end_date: z.string(),
   bullets: z.array(z.string()),
-})
+});
 
 const EducationSchema = z.object({
   institution: z.string(),
@@ -24,14 +27,14 @@ const EducationSchema = z.object({
   end_date: z.string(),
   gpa: optStr,
   notes: optStr,
-})
+});
 
 const ProjectSchema = z.object({
   name: z.string(),
   description: z.string(),
   technologies: z.array(z.string()),
   url: optStr,
-})
+});
 
 export const ResumeDataSchema = z.object({
   full_name: z.string(),
@@ -44,12 +47,12 @@ export const ResumeDataSchema = z.object({
   work_experience: z.array(WorkExperienceSchema),
   education: z.array(EducationSchema),
   projects: z.array(ProjectSchema).default([]),
-})
+});
 
-export type ResumeData = z.infer<typeof ResumeDataSchema>
-export type WorkExperience = z.infer<typeof WorkExperienceSchema>
-export type Education = z.infer<typeof EducationSchema>
-export type Project = z.infer<typeof ProjectSchema>
+export type ResumeData = z.infer<typeof ResumeDataSchema>;
+export type WorkExperience = z.infer<typeof WorkExperienceSchema>;
+export type Education = z.infer<typeof EducationSchema>;
+export type Project = z.infer<typeof ProjectSchema>;
 
 // ---------------------------------------------------------------------------
 // Extraction Prompt
@@ -73,7 +76,7 @@ Use this exact structure:
       "location": "string or null",
       "start_date": "string (e.g. Jan 2020)",
       "end_date": "string (e.g. Dec 2023 or Present)",
-      "bullets": ["bullet 1", "bullet 2"]
+      "bullets": []
     }
   ],
   "education": [
@@ -98,11 +101,64 @@ Use this exact structure:
 
 Rules:
 - List work experience in reverse chronological order (most recent first).
-- For bullets: extract any listed bullets/descriptions from the PDF. If none exist for a role, generate 2-3 concise, impactful bullet points based on the job title and company context.
+- For bullets: ALWAYS return an empty array []. Do NOT generate or guess bullet points.
 - Format dates consistently, e.g. "Jan 2020", "2020", or "Present".
 - For optional fields that are absent, use null (not omit the key).
 - For array fields that are absent, use [].
-- Return ONLY the raw JSON object — no markdown fences, no prose.`
+- Return ONLY the raw JSON object — no markdown fences, no prose.`;
+
+// ---------------------------------------------------------------------------
+// Bullet Point Generation
+// ---------------------------------------------------------------------------
+
+export async function generateBulletPoints(
+  jobs: WorkExperience[],
+  descriptions: string[],
+): Promise<string[][]> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+  const jobsPayload = jobs.map((job, i) => ({
+    company: job.company,
+    title: job.title,
+    start: job.start_date,
+    end: job.end_date,
+    description: descriptions[i] ?? '',
+  }));
+
+  const prompt = `You are writing resume bullet points. For each job below, use the provided description
+to generate exactly 3–4 concise, impactful bullet points in past tense.
+If no description is given, infer from the job title and company.
+
+Return a JSON array of arrays (one inner array per job, same order):
+[["bullet 1", "bullet 2", "bullet 3"], ["bullet a", "bullet b"], ...]
+
+Jobs:
+${JSON.stringify(jobsPayload, null, 2)}
+
+Return ONLY the raw JSON array — no markdown, no prose.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: [{ parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: 'application/json',
+      temperature: 0.4,
+    },
+  });
+
+  const text = response.text;
+  if (!text) throw new Error('Empty response from Gemini (bullet generation)');
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`Gemini returned invalid JSON for bullets: ${text.slice(0, 200)}`);
+  }
+
+  const result = z.array(z.array(z.string())).parse(parsed);
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Main export
@@ -112,32 +168,32 @@ export async function extractResumeData(
   buffer: Buffer,
   filename: string,
 ): Promise<ResumeData> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-  let uploadedFileName: string | undefined
+  let uploadedFileName: string | undefined;
 
   try {
     // 1. Upload PDF buffer to Gemini File API
     const uploadedFile = await ai.files.upload({
-      file: new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }),
-      config: { mimeType: 'application/pdf', displayName: filename },
-    })
+      file: new Blob([new Uint8Array(buffer)], { type: "application/pdf" }),
+      config: { mimeType: "application/pdf", displayName: filename },
+    });
 
     if (!uploadedFile.uri || !uploadedFile.name) {
-      throw new Error('File upload to Gemini failed: missing URI or name')
+      throw new Error("File upload to Gemini failed: missing URI or name");
     }
 
-    uploadedFileName = uploadedFile.name
+    uploadedFileName = uploadedFile.name;
 
     // 2. Extract structured data
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: "gemini-2.0-flash",
       contents: [
         {
           parts: [
             {
               fileData: {
-                mimeType: 'application/pdf',
+                mimeType: "application/pdf",
                 fileUri: uploadedFile.uri,
               },
             },
@@ -146,30 +202,30 @@ export async function extractResumeData(
         },
       ],
       config: {
-        responseMimeType: 'application/json',
+        responseMimeType: "application/json",
         temperature: 0.1,
       },
-    })
+    });
 
-    const text = response.text
+    const text = response.text;
     if (!text) {
-      throw new Error('Empty response from Gemini')
+      throw new Error("Empty response from Gemini");
     }
 
     // 3. Parse and validate with Zod
-    let parsed: unknown
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(text)
+      parsed = JSON.parse(text);
     } catch {
-      throw new Error(`Gemini returned invalid JSON: ${text.slice(0, 200)}`)
+      throw new Error(`Gemini returned invalid JSON: ${text.slice(0, 200)}`);
     }
 
-    return ResumeDataSchema.parse(parsed)
+    return ResumeDataSchema.parse(parsed);
   } finally {
     // Always delete the file from Gemini servers
     if (uploadedFileName) {
       try {
-        await ai.files.delete({ name: uploadedFileName })
+        await ai.files.delete({ name: uploadedFileName });
       } catch {
         // Ignore cleanup errors — file will expire automatically
       }

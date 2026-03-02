@@ -28,38 +28,38 @@
 
 % ---- Section heading with rule (no titlesec needed) ----
 \renewcommand{\section}[1]{%
-  \vspace{6pt}%
+  \vspace{12pt}%
   {\large\bfseries\scshape #1}%
   \par\nobreak\vspace{-4pt}%
   \noindent\rule{\linewidth}{0.4pt}%
-  \vspace{2pt}\par%
+  \vspace{5pt}\par%
 }
 
 % ---- Resume commands ----
 \newcommand{\resumeItem}[1]{%
-  \item\small{#1\vspace{-2pt}}%
+  \item\small{#1}%
 }
 
 \newcommand{\resumeSubheading}[4]{%
-  \vspace{-2pt}\item[]%
+  \item[]%
   \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}%
     \textbf{#1} & \small #2 \\%
     \textit{\small #3} & \textit{\small #4} \\%
-  \end{tabular*}\vspace{-7pt}%
+  \end{tabular*}\vspace{-3pt}%
 }
 
 \newcommand{\resumeProjectHeading}[2]{%
   \item[]%
   \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}%
     \small #1 & \small #2 \\%
-  \end{tabular*}\vspace{-7pt}%
+  \end{tabular*}\vspace{-3pt}%
 }
 
 % Built-in \list instead of enumitem
 \newcommand{\resumeSubHeadingListStart}{%
   \begin{list}{}{%
     \setlength{\leftmargin}{0pt}%
-    \setlength{\itemsep}{0pt}%
+    \setlength{\itemsep}{8pt}%
     \setlength{\parsep}{0pt}%
     \setlength{\topsep}{2pt}%
   }%
@@ -69,12 +69,12 @@
 \newcommand{\resumeItemListStart}{%
   \begin{list}{\textbullet}{%
     \setlength{\leftmargin}{1.5em}%
-    \setlength{\itemsep}{0pt}%
+    \setlength{\itemsep}{2pt}%
     \setlength{\parsep}{0pt}%
-    \setlength{\topsep}{2pt}%
+    \setlength{\topsep}{4pt}%
   }%
 }
-\newcommand{\resumeItemListEnd}{\end{list}\vspace{-5pt}}
+\newcommand{\resumeItemListEnd}{\end{list}\vspace{2pt}}
 
 % -----------------------------------------------
 \begin{document}
