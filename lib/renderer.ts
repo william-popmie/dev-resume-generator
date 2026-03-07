@@ -9,6 +9,25 @@ import type { ResumeData } from './types'
 
 const execFileAsync = promisify(execFile)
 
+const PDFLATEX = '/Library/TeX/texbin/pdflatex'
+
+async function runPdflatex(tmpDir: string): Promise<void> {
+  const args = [
+    '-interaction=nonstopmode',
+    '-output-directory', tmpDir,
+    path.join(tmpDir, 'main.tex'),
+  ]
+  try {
+    await execFileAsync(PDFLATEX, args, { cwd: tmpDir })
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; stderr?: string; message?: string }
+    const log = e.stdout ?? e.stderr ?? e.message ?? 'unknown error'
+    // Extract the most useful part of the pdflatex log (lines starting with !)
+    const errorLines = log.split('\n').filter(l => l.startsWith('!')).join('\n')
+    throw new Error(`pdflatex failed:\n${errorLines || log.slice(0, 800)}`)
+  }
+}
+
 export async function renderAndCompile(resumeData: ResumeData, bullets: string[][]): Promise<Buffer> {
   const { main, preamblePath } = loadTemplate('modern-template')
 
@@ -25,19 +44,13 @@ export async function renderAndCompile(resumeData: ResumeData, bullets: string[]
     fs.writeFileSync(path.join(tmpDir, 'main.tex'), latex, 'utf-8')
     fs.copyFileSync(preamblePath, path.join(tmpDir, 'preamble.tex'))
 
-    const pdflatexArgs = [
-      '-interaction=nonstopmode',
-      '-output-directory', tmpDir,
-      path.join(tmpDir, 'main.tex'),
-    ]
-
     // Run twice to resolve references
-    await execFileAsync('pdflatex', pdflatexArgs, { cwd: tmpDir })
-    await execFileAsync('pdflatex', pdflatexArgs, { cwd: tmpDir })
+    await runPdflatex(tmpDir)
+    await runPdflatex(tmpDir)
 
     const pdfPath = path.join(tmpDir, 'main.pdf')
     if (!fs.existsSync(pdfPath)) {
-      throw new Error('pdflatex did not produce output')
+      throw new Error('pdflatex did not produce a PDF')
     }
 
     return fs.readFileSync(pdfPath)

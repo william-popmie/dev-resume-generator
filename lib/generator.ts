@@ -24,6 +24,22 @@ export async function generateBullets(resumeData: ResumeData, descriptions: stri
   return results
 }
 
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status
+      if (status === 529 && attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2 ** attempt * 1000))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('unreachable')
+}
+
 async function generatePositionBullets(
   title: string,
   company: string,
@@ -35,8 +51,8 @@ async function generatePositionBullets(
   if (linkedinDescription) contextParts.push(`LinkedIn description: ${linkedinDescription}`)
   const context = contextParts.join('\n')
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await withRetry(() => client.messages.create({
+    model: 'claude-sonnet-4-6',
     max_tokens: 512,
     messages: [
       {
@@ -56,7 +72,7 @@ Rules:
 Example: ["Led development of X, resulting in 30% faster Y", "Built Z using A and B"]`,
       },
     ],
-  })
+  }))
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '[]'
 
