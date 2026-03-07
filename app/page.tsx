@@ -239,8 +239,8 @@ export default function Home() {
         {step === 'describe' && resumeData && (
           <>
             <p className="text-gray-500 text-sm mb-6">
-              Describe what you did in each role — Gemini will turn your notes into polished bullet
-              points. Leave a field blank and it will infer from the job title. Anything Gemini
+              Describe what you did in each role — Claude will turn your notes into polished bullet
+              points. Leave a field blank and it will infer from the job title. Anything Claude
               already found on your LinkedIn profile is shown in grey.
             </p>
 
@@ -379,7 +379,7 @@ export default function Home() {
 
         {/* Footer */}
         <p className="mt-10 text-center text-gray-300 text-xs">
-          Your PDF is processed by Gemini and immediately deleted. Nothing is stored.
+          Your PDF is processed by Claude and never stored.
         </p>
       </div>
     </main>
