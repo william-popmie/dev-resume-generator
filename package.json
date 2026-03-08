@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:latex": "npx tsx scripts/test-latex.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
