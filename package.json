@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:latex": "npx tsx scripts/test-latex.ts",
-    "test:extract": "npx tsx scripts/test-extract.ts"
+    "test:extract": "npx tsx scripts/test-extract.ts",
+    "test:pipeline": "npx tsx scripts/test-pipeline.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
