@@ -9,7 +9,18 @@ export async function POST(request: NextRequest) {
     const resumeData = ResumeDataSchema.parse(body.resumeData)
     const descriptions: string[] = Array.isArray(body.descriptions) ? body.descriptions : []
 
-    const bullets = await generateBullets(resumeData, descriptions)
+    // Convert flat descriptions array to Record<"company|||title", notes>
+    const userNotes: Record<string, string> = {}
+    let fi = 0
+    for (const company of resumeData.work_experience) {
+      for (const pos of company.positions) {
+        const key = `${company.company}|||${pos.title}`
+        userNotes[key] = descriptions[fi] ?? ''
+        fi++
+      }
+    }
+
+    const bullets = await generateBullets(resumeData, userNotes)
     const pdfBuffer = await renderAndCompile(resumeData, bullets)
 
     return new NextResponse(new Uint8Array(pdfBuffer), {

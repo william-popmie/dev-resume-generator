@@ -6,7 +6,7 @@ import type { ResumeData } from "./types";
 import type { BulletsMap } from "./latex/sections";
 import { buildHeader, buildExperience, buildEducation, buildSkills } from "./latex/sections";
 
-const TEMPLATE_DIR = path.resolve(__dirname, "../latex-templates/modern-template");
+const TEMPLATE_DIR = path.join(process.cwd(), "latex-templates/modern-template");
 
 function buildMainTex(data: ResumeData, bullets: BulletsMap): string {
   return `\\documentclass[letterpaper,11pt]{article}
