@@ -1,0 +1,94 @@
+{
+  "name": "Wout Van Hemelrijck",
+  "phone": "",
+  "email": "wout.vanhemelrijck@nextleuven.be",
+  "linkedin_url": "https://www.linkedin.com/in/wout-vanhemelrijck-981988302",
+  "location": "Leuven, Belgium",
+  "work_experience": [
+    {
+      "company": "NEXT Leuven",
+      "location": "Leuven, Belgium",
+      "positions": [
+        {
+          "title": "Startup Relations - Trip",
+          "start_date": "Jun. 2025",
+          "end_date": "Present",
+          "location": "Leuven, Belgium",
+          "linkedin_description": "Responsible for Student Startup Trip 2026 to New York"
+        },
+        {
+          "title": "Board Member",
+          "start_date": "Aug. 2025",
+          "end_date": "Present",
+          "location": "Leuven, Belgium",
+          "linkedin_description": ""
+        },
+        {
+          "title": "Holy Hack Organiser",
+          "start_date": "Jul. 2024",
+          "end_date": "Jun. 2025",
+          "location": "Leuven, Belgium",
+          "linkedin_description": "Organised a 24h Hackathon where students come up and prototype new startup ideas."
+        }
+      ]
+    },
+    {
+      "company": "Plug and Play Tech Center",
+      "location": "",
+      "positions": [
+        {
+          "title": "University Program Fellow",
+          "start_date": "Oct. 2025",
+          "end_date": "Present",
+          "location": "",
+          "linkedin_description": "Currently reviewing 30+ pitch decks weekly and steadily building toward 700+ total reviews during the 7-month program. Contributed to bi-weekly investment discussions on early-stage opportunities."
+        }
+      ]
+    },
+    {
+      "company": "Freelance",
+      "location": "",
+      "positions": [
+        {
+          "title": "Website Developer",
+          "start_date": "Apr. 2022",
+          "end_date": "Jul. 2024",
+          "location": "",
+          "linkedin_description": "Helping small businesses (like your local bakery) get online by designing, building and hosting their websites"
+        }
+      ]
+    },
+    {
+      "company": "CTIF - CFI",
+      "location": "Brussels, Belgium",
+      "positions": [
+        {
+          "title": "Administrative Assistant",
+          "start_date": "Jul. 2023",
+          "end_date": "Aug. 2023",
+          "location": "Brussels, Belgium",
+          "linkedin_description": "Got a huge pile of printed out mails to manually put in a database (boring stuff)"
+        }
+      ]
+    }
+  ],
+  "education": [
+    {
+      "school": "KU Leuven",
+      "degree": "Bachelor of Engineering - BE, Engineering Science",
+      "start_date": "Sept. 2023",
+      "end_date": "Jun. 2026",
+      "location": "Leuven, Belgium"
+    }
+  ],
+  "skills": [
+    {
+      "category": "Management & Business",
+      "skills": "Event Planning, Marketing, Business Relationship Management"
+    },
+    {
+      "category": "Technical",
+      "skills": "Website Development"
+    }
+  ]
+}

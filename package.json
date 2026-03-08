@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:latex": "npx tsx scripts/test-latex.ts"
+    "test:latex": "npx tsx scripts/test-latex.ts",
+    "test:extract": "npx tsx scripts/test-extract.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.36.3",
+    "dotenv": "17.3.1",
     "next": "^15.1.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
