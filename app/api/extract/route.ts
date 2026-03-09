@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const resumeData = await extractResumeData(buffer, file.name)
+    const resumeData = await extractResumeData(buffer)
 
     return NextResponse.json(resumeData)
   } catch (err: unknown) {
@@ -41,16 +41,13 @@ export async function POST(request: NextRequest) {
       (err as { status?: number; code?: number })?.code
     if (code === 429) {
       return NextResponse.json(
-        { error: 'Gemini API rate limit reached. Please wait a moment and try again.' },
+        { error: 'Claude API rate limit reached. Please wait a moment and try again.' },
         { status: 429 },
       )
     }
 
     const message = err instanceof Error ? err.message : 'Internal server error'
 
-    if (message.includes('Gemini')) {
-      return NextResponse.json({ error: message }, { status: 500 })
-    }
     if (message.includes('Invalid JSON') || message.includes('ZodError')) {
       return NextResponse.json(
         { error: 'Failed to parse resume data from PDF. Please try a different export.' },
