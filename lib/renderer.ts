@@ -11,6 +11,9 @@ const TEMPLATE_DIR = path.join(process.cwd(), "latex-templates/modern-template")
 function buildMainTex(data: ResumeData, bullets: BulletsMap): string {
   return `\\documentclass[letterpaper,11pt]{article}
 
+% utf8 input encoding — must come before preamble's fontenc
+\\usepackage[utf8]{inputenc}
+
 \\input{preamble}
 
 %-------------------------------------------
