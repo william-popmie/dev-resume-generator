@@ -24,6 +24,7 @@ export function buildHeader(data: ResumeData): string {
 }
 
 export function buildExperience(data: ResumeData, bullets: BulletsMap): string {
+  if (data.work_experience.length === 0) return "";
   const e = escapeTex;
   const lines: string[] = ["\\section{EXPERIENCE}", "  \\resumeSubHeadingListStart", ""];
 
@@ -64,6 +65,7 @@ export function buildExperience(data: ResumeData, bullets: BulletsMap): string {
 }
 
 export function buildEducation(data: ResumeData): string {
+  if (data.education.length === 0) return "";
   const e = escapeTex;
   const lines: string[] = [
     "\\section{EDUCATION}",
@@ -87,6 +89,7 @@ export function buildEducation(data: ResumeData): string {
 }
 
 export function buildSkills(data: ResumeData): string {
+  if (data.skills.length === 0) return "";
   const e = escapeTex;
   const lines: string[] = [
     "\\section{SKILLS}",
