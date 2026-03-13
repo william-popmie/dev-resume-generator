@@ -82,9 +82,11 @@ export async function extractResumeData(pdfBuffer: Buffer) {
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(cleaned)
   } catch {
     throw new Error('Invalid JSON from Claude extractor')
   }
