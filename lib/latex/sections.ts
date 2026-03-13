@@ -28,15 +28,24 @@ export function buildExperience(data: ResumeData, bullets: BulletsMap): string {
   const lines: string[] = ["\\section{EXPERIENCE}", "  \\resumeSubHeadingListStart", ""];
 
   for (const company of data.work_experience) {
-    for (const pos of company.positions) {
+    for (let i = 0; i < company.positions.length; i++) {
+      const pos = company.positions[i];
       const key = `${company.company}|||${pos.title}`;
       const positionBullets = bullets[key] ?? [];
+      const loc = pos.location || company.location || "";
 
-      lines.push(
-        `    \\resumeSubheading`,
-        `    {${e(company.company)}}{${e(pos.start_date)} -- ${e(pos.end_date)}}`,
-        `    {${e(pos.title)}}{${e(pos.location || company.location)}}`,
-      );
+      if (i === 0) {
+        lines.push(
+          `    \\resumeSubheading`,
+          `    {${e(company.company)}}{${e(pos.start_date)} -- ${e(pos.end_date)}}`,
+          `    {${e(pos.title)}}{${e(loc)}}`,
+        );
+      } else {
+        lines.push(
+          `    \\resumeSubheadingContinued`,
+          `    {${e(pos.title)}}{${e(pos.start_date)} -- ${e(pos.end_date)}}{${e(loc)}}`,
+        );
+      }
 
       if (positionBullets.length > 0) {
         lines.push(`    \\resumeItemListStart`);

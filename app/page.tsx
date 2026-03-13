@@ -5,6 +5,12 @@ import type { ResumeData } from '@/lib/extractor'
 
 type Step = 'upload' | 'describe' | 'download'
 
+type SelectionState = {
+  work_experience: boolean[][] // [companyIdx][positionIdx]
+  education: boolean[]
+  skills: boolean[]
+}
+
 // Returns the flat position index across all companies.
 // positions are ordered: company[0].positions[0], [1], ..., company[1].positions[0], ...
 function flatIndex(resumeData: ResumeData, companyIdx: number, positionIdx: number): number {
@@ -13,6 +19,15 @@ function flatIndex(resumeData: ResumeData, companyIdx: number, positionIdx: numb
     idx += resumeData.work_experience[c].positions.length
   }
   return idx + positionIdx
+}
+
+function SectionBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-8">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
 }
 
 export default function Home() {
@@ -28,6 +43,7 @@ export default function Home() {
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   // Flat array — one entry per position across all companies
   const [descriptions, setDescriptions] = useState<string[]>([])
+  const [selection, setSelection] = useState<SelectionState | null>(null)
   const [generating, setGenerating] = useState(false)
 
   // Step 3
@@ -81,6 +97,11 @@ export default function Home() {
       const totalPositions = data.work_experience.reduce((acc, c) => acc + c.positions.length, 0)
       setResumeData(data)
       setDescriptions(Array(totalPositions).fill(''))
+      setSelection({
+        work_experience: data.work_experience.map(c => c.positions.map(() => true)),
+        education: data.education.map(() => true),
+        skills: data.skills.map(() => true),
+      })
       setStep('describe')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
@@ -101,16 +122,55 @@ export default function Home() {
     })
   }
 
+  const togglePosition = (ci: number, pi: number) => {
+    setSelection(prev => {
+      if (!prev) return prev
+      const we = prev.work_experience.map(row => [...row])
+      we[ci][pi] = !we[ci][pi]
+      return { ...prev, work_experience: we }
+    })
+  }
+
+  const toggleFlat = (section: 'education' | 'skills', i: number) => {
+    setSelection(prev => {
+      if (!prev) return prev
+      const arr = [...prev[section]]
+      arr[i] = !arr[i]
+      return { ...prev, [section]: arr }
+    })
+  }
+
   const handleGenerate = async () => {
-    if (!resumeData) return
+    if (!resumeData || !selection) return
     setGenerating(true)
     setError(null)
 
     try {
+      const sel = selection
+
+      const filteredExperience = resumeData.work_experience
+        .map((c, ci) => ({ ...c, positions: c.positions.filter((_, pi) => sel.work_experience[ci]?.[pi] ?? true) }))
+        .filter(c => c.positions.length > 0)
+
+      const filteredResumeData: ResumeData = {
+        ...resumeData,
+        work_experience: filteredExperience,
+        education: resumeData.education.filter((_, i) => sel.education[i] ?? true),
+        skills: resumeData.skills.filter((_, i) => sel.skills[i] ?? true),
+      }
+
+      const filteredDescriptions: string[] = []
+      resumeData.work_experience.forEach((company, ci) =>
+        company.positions.forEach((_, pi) => {
+          if (sel.work_experience[ci]?.[pi] ?? true)
+            filteredDescriptions.push(descriptions[flatIndex(resumeData, ci, pi)])
+        })
+      )
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeData, descriptions }),
+        body: JSON.stringify({ resumeData: filteredResumeData, descriptions: filteredDescriptions }),
       })
 
       if (!response.ok) {
@@ -137,6 +197,7 @@ export default function Home() {
     setFile(null)
     setResumeData(null)
     setDescriptions([])
+    setSelection(null)
     setDownloadUrl(null)
     setError(null)
   }
@@ -236,15 +297,17 @@ export default function Home() {
         {/* ------------------------------------------------------------------ */}
         {/* STEP 2 — Describe roles                                             */}
         {/* ------------------------------------------------------------------ */}
-        {step === 'describe' && resumeData && (
+        {step === 'describe' && resumeData && selection && (
           <>
             <p className="text-gray-500 text-sm mb-6">
               Describe what you did in each role — Claude will turn your notes into polished bullet
               points. Leave a field blank and it will infer from the job title. Anything Claude
-              already found on your LinkedIn profile is shown in grey.
+              already found on your LinkedIn profile is shown in grey. Uncheck any item to exclude it
+              from the resume.
             </p>
 
-            <div className="space-y-5">
+            {/* Work Experience */}
+            <SectionBlock title="Work Experience">
               {resumeData.work_experience.map((company, ci) => (
                 <div
                   key={ci}
@@ -262,43 +325,112 @@ export default function Home() {
                   <div className="divide-y divide-gray-100">
                     {company.positions.map((pos, pi) => {
                       const fi = flatIndex(resumeData, ci, pi)
+                      const enabled = selection.work_experience[ci]?.[pi] ?? true
                       return (
-                        <div key={pi} className="px-5 py-4">
-                          {/* Position meta */}
-                          <div className="flex flex-wrap items-baseline gap-x-2 mb-2">
-                            <span className="font-medium text-gray-800 text-sm">{pos.title}</span>
-                            {pos.location && (
-                              <span className="text-gray-400 text-xs">· {pos.location}</span>
-                            )}
-                            <span className="text-gray-400 text-xs ml-auto">
-                              {pos.start_date} – {pos.end_date}
-                            </span>
+                        <div key={pi} className={`transition-opacity ${!enabled ? 'opacity-50' : ''}`}>
+                          {/* Position header bar */}
+                          <div className="relative px-5 py-3 bg-gray-50 border-b border-gray-100">
+                            <div className="flex flex-wrap items-baseline gap-x-2 pr-8">
+                              <span className="font-medium text-gray-800 text-sm">{pos.title}</span>
+                              {pos.location && (
+                                <span className="text-gray-400 text-xs">· {pos.location}</span>
+                              )}
+                              <span className="text-gray-400 text-xs ml-auto">
+                                {pos.start_date} – {pos.end_date}
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="absolute top-3 right-4 h-4 w-4 accent-blue-600 cursor-pointer flex-shrink-0"
+                              checked={enabled}
+                              onChange={() => togglePosition(ci, pi)}
+                            />
                           </div>
 
-                          {/* LinkedIn description (context) */}
-                          {pos.linkedin_description && (
-                            <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
-                              {pos.linkedin_description}
-                            </p>
-                          )}
+                          {/* Position body */}
+                          <div className="px-5 py-4">
+                            {/* LinkedIn description (context) */}
+                            {enabled && pos.linkedin_description && (
+                              <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
+                                {pos.linkedin_description}
+                              </p>
+                            )}
 
-                          {/* User description textarea */}
-                          <textarea
-                            className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
-                              placeholder-gray-400 resize-none focus:outline-none focus:ring-2
-                              focus:ring-blue-400 focus:border-transparent transition"
-                            rows={3}
-                            placeholder="Describe your responsibilities and achievements…"
-                            value={descriptions[fi]}
-                            onChange={(e) => setDescription(fi, e.target.value)}
-                          />
+                            {/* User description textarea */}
+                            {enabled && (
+                              <textarea
+                                className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
+                                  placeholder-gray-400 resize-none focus:outline-none focus:ring-2
+                                  focus:ring-blue-400 focus:border-transparent transition"
+                                rows={3}
+                                placeholder="Describe your responsibilities and achievements…"
+                                value={descriptions[fi]}
+                                onChange={(e) => setDescription(fi, e.target.value)}
+                              />
+                            )}
+                          </div>
                         </div>
                       )
                     })}
                   </div>
                 </div>
               ))}
-            </div>
+            </SectionBlock>
+
+            {/* Education */}
+            {resumeData.education.length > 0 && (
+              <SectionBlock title="Education">
+                {resumeData.education.map((edu, i) => {
+                  const enabled = selection.education[i] ?? true
+                  return (
+                    <div
+                      key={i}
+                      className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 flex items-start justify-between gap-4 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{edu.school}</p>
+                        <p className="text-sm text-gray-500">{edu.degree}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {edu.start_date} – {edu.end_date}{edu.location ? ` · ${edu.location}` : ''}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
+                        checked={enabled}
+                        onChange={() => toggleFlat('education', i)}
+                      />
+                    </div>
+                  )
+                })}
+              </SectionBlock>
+            )}
+
+            {/* Skills */}
+            {resumeData.skills.length > 0 && (
+              <SectionBlock title="Skills">
+                {resumeData.skills.map((cat, i) => {
+                  const enabled = selection.skills[i] ?? true
+                  return (
+                    <div
+                      key={i}
+                      className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 flex items-start justify-between gap-4 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{cat.category}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{cat.skills}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
+                        checked={enabled}
+                        onChange={() => toggleFlat('skills', i)}
+                      />
+                    </div>
+                  )
+                })}
+              </SectionBlock>
+            )}
 
             <div className="mt-6 flex gap-3">
               <button
