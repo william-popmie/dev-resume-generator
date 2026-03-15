@@ -1,8 +1,11 @@
 import { escapeTex } from "./escape";
-import type { ResumeData } from "../types";
+import type { ResumeData, GitHubProject } from "../types";
 
 /** Bullets keyed by "company|||title" */
 export type BulletsMap = Record<string, string[]>;
+
+/** Bullets keyed by project name */
+export type ProjectBulletsMap = Record<string, string[]>;
 
 export function buildHeader(data: ResumeData): string {
   const e = escapeTex;
@@ -107,6 +110,36 @@ export function buildSkills(data: ResumeData): string {
       `\\resumeItemListEnd`,
       "",
     );
+  }
+
+  lines.push("\\resumeSubHeadingListEnd");
+  return lines.join("\n");
+}
+
+export function buildProjects(projects: GitHubProject[], bullets: ProjectBulletsMap): string {
+  if (projects.length === 0) return "";
+  const e = escapeTex;
+  const lines: string[] = [
+    "\\section{PROJECTS}",
+    "",
+    "\\resumeSubHeadingListStart",
+    "",
+  ];
+
+  for (const project of projects) {
+    const projectBullets = bullets[project.name] ?? [];
+    lines.push(
+      `\\resumeProjectHeading`,
+      `{\\textbf{${e(project.name)}} $|$ \\href{${project.url}}{\\myuline{GitHub}}}{}`,
+    );
+    if (projectBullets.length > 0) {
+      lines.push(`\\resumeItemListStart`);
+      for (const bullet of projectBullets) {
+        lines.push(`    \\resumeItem{${e(bullet)}}`);
+      }
+      lines.push(`\\resumeItemListEnd`);
+    }
+    lines.push("");
   }
 
   lines.push("\\resumeSubHeadingListEnd");

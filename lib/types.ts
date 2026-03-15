@@ -43,3 +43,13 @@ export type Company = z.infer<typeof CompanySchema>
 export type Position = z.infer<typeof PositionSchema>
 export type Education = z.infer<typeof EducationSchema>
 export type SkillCategory = z.infer<typeof SkillCategorySchema>
+
+export const GitHubProjectSchema = z.object({
+  name: z.string(),
+  description: z.string().optional().default(''),
+  url: z.string(),
+  language: z.string().optional().default(''),
+  topics: z.array(z.string()).optional().default([]),
+  readme: z.string().optional().default(''),
+})
+export type GitHubProject = z.infer<typeof GitHubProjectSchema>

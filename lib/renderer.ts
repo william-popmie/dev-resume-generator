@@ -2,81 +2,50 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import type { ResumeData } from "./types";
-import type { BulletsMap } from "./latex/sections";
-import { buildHeader, buildExperience, buildEducation, buildSkills } from "./latex/sections";
-
-const TEMPLATE_DIR = path.join(process.cwd(), "latex-templates/modern-template");
-
-function buildMainTex(data: ResumeData, bullets: BulletsMap): string {
-  return `\\documentclass[letterpaper,11pt]{article}
-
-% utf8 input encoding — must come before preamble's fontenc
-\\usepackage[utf8]{inputenc}
-
-\\input{preamble}
-
-%-------------------------------------------
-%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\\begin{document}
-
-%----------HEADING----------
-${buildHeader(data)}
-
-\\input{sections/experience}
-\\input{sections/education}
-\\input{sections/skills}
-
-\\end{document}
-`;
-}
+import type { ResumeData, GitHubProject } from "./types";
+import type { BulletsMap, ProjectBulletsMap } from "./latex/sections";
+import { buildHeader, buildExperience, buildEducation, buildSkills, buildProjects } from "./latex/sections";
 
 export async function renderAndCompile(
   data: ResumeData,
   bullets: BulletsMap,
+  template: string = 'formal',
+  projects?: GitHubProject[],
+  projectBullets?: ProjectBulletsMap,
 ): Promise<Buffer> {
+  const templateFile = path.join(process.cwd(), `latex-templates/${template}-template/template.tex`);
   const tmpDir = path.join(os.tmpdir(), `resume-${crypto.randomUUID()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
+  const hasProjects = (projects?.length ?? 0) > 0;
+
   try {
-    // Copy template (preamble.tex and section examples as reference, fonts, etc.)
-    execSync(`cp -r "${TEMPLATE_DIR}/." "${tmpDir}"`);
+    let tex = fs.readFileSync(templateFile, "utf8");
+    tex = tex.replace("%%HEADER%%", buildHeader(data));
+    tex = tex.replace("%%EXPERIENCE%%", buildExperience(data, bullets));
+    tex = tex.replace("%%PROJECTS%%", hasProjects ? buildProjects(projects!, projectBullets ?? {}) : "");
+    tex = tex.replace("%%EDUCATION%%", buildEducation(data));
+    tex = tex.replace("%%SKILLS%%", buildSkills(data));
 
-    // Overwrite main.tex with generated content
-    fs.writeFileSync(path.join(tmpDir, "main.tex"), buildMainTex(data, bullets));
-
-    // Overwrite section files with generated content
-    fs.writeFileSync(
-      path.join(tmpDir, "sections", "experience.tex"),
-      buildExperience(data, bullets),
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, "sections", "education.tex"),
-      buildEducation(data),
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, "sections", "skills.tex"),
-      buildSkills(data),
-    );
+    fs.writeFileSync(path.join(tmpDir, "resume.tex"), tex);
 
     // pdflatex twice to resolve references
-    const cmd = `pdflatex -interaction=nonstopmode -halt-on-error main.tex`;
+    const cmd = `pdflatex -interaction=nonstopmode -halt-on-error resume.tex`;
     for (let i = 0; i < 2; i++) {
       try {
         execSync(cmd, { cwd: tmpDir, stdio: "pipe" });
       } catch (err: any) {
-        const pdfPath = path.join(tmpDir, "main.pdf");
+        const pdfPath = path.join(tmpDir, "resume.pdf");
         if (!fs.existsSync(pdfPath)) {
-          const log = fs.existsSync(path.join(tmpDir, "main.log"))
-            ? fs.readFileSync(path.join(tmpDir, "main.log"), "utf8")
+          const log = fs.existsSync(path.join(tmpDir, "resume.log"))
+            ? fs.readFileSync(path.join(tmpDir, "resume.log"), "utf8")
             : err.stdout?.toString() ?? "";
           throw new Error(`pdflatex failed:\n${log}`);
         }
       }
     }
 
-    const pdfPath = path.join(tmpDir, "main.pdf");
+    const pdfPath = path.join(tmpDir, "resume.pdf");
     if (!fs.existsSync(pdfPath)) throw new Error("PDF not produced");
 
     return fs.readFileSync(pdfPath);

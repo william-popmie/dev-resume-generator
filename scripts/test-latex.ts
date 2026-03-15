@@ -8,9 +8,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-const TEMPLATE_DIR = path.resolve(
+const TEMPLATE_FILE = path.resolve(
   __dirname,
-  "../latex-templates/modern-template"
+  "../latex-templates/modern-template/template.tex"
 );
 const OUTPUT_DIR = path.resolve(__dirname, "output");
 const OUTPUT_PDF = path.join(OUTPUT_DIR, "output.pdf");
@@ -22,18 +22,18 @@ function main() {
   try {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-    // Copy the entire template into a temp dir so pdflatex auxiliary files
+    // Copy template.tex into a temp dir so pdflatex auxiliary files
     // don't pollute the source tree.
-    execSync(`cp -r "${TEMPLATE_DIR}/." "${tmpDir}"`);
+    fs.copyFileSync(TEMPLATE_FILE, path.join(tmpDir, "resume.tex"));
 
     // Run pdflatex twice (resolves references/page numbers).
-    const cmd = `pdflatex -interaction=nonstopmode -halt-on-error main.tex`;
+    const cmd = `pdflatex -interaction=nonstopmode -halt-on-error resume.tex`;
     for (let i = 0; i < 2; i++) {
       try {
         execSync(cmd, { cwd: tmpDir, stdio: "pipe" });
       } catch (err: any) {
         // pdflatex exits non-zero on warnings too; check if PDF was produced.
-        const pdfPath = path.join(tmpDir, "main.pdf");
+        const pdfPath = path.join(tmpDir, "resume.pdf");
         if (!fs.existsSync(pdfPath)) {
           console.error("pdflatex failed. Log output:\n");
           console.error(err.stdout?.toString() ?? "");
@@ -43,7 +43,7 @@ function main() {
       }
     }
 
-    const pdfPath = path.join(tmpDir, "main.pdf");
+    const pdfPath = path.join(tmpDir, "resume.pdf");
     if (!fs.existsSync(pdfPath)) {
       console.error("PDF was not produced. Check the log above.");
       process.exit(1);
