@@ -6,17 +6,17 @@ import type { ResumeData } from "./types";
 import type { BulletsMap } from "./latex/sections";
 import { buildHeader, buildExperience, buildEducation, buildSkills } from "./latex/sections";
 
-const TEMPLATE_FILE = path.join(process.cwd(), "latex-templates/modern-template/template.tex");
-
 export async function renderAndCompile(
   data: ResumeData,
   bullets: BulletsMap,
+  template: string = 'formal',
 ): Promise<Buffer> {
+  const templateFile = path.join(process.cwd(), `latex-templates/${template}-template/template.tex`);
   const tmpDir = path.join(os.tmpdir(), `resume-${crypto.randomUUID()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    let tex = fs.readFileSync(TEMPLATE_FILE, "utf8");
+    let tex = fs.readFileSync(templateFile, "utf8");
     tex = tex.replace("%%HEADER%%", buildHeader(data));
     tex = tex.replace("%%EXPERIENCE%%", buildExperience(data, bullets));
     tex = tex.replace("%%EDUCATION%%", buildEducation(data));
