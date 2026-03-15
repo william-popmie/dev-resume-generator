@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
-import type { ResumeData } from '@/lib/extractor'
+import type { ResumeData, Company, Position, Education, SkillCategory } from '@/lib/types'
 
 type Step = 'upload' | 'describe' | 'download'
 
@@ -21,6 +21,24 @@ function flatIndex(resumeData: ResumeData, companyIdx: number, positionIdx: numb
   return idx + positionIdx
 }
 
+function blankResumeData(): ResumeData {
+  return { name: '', phone: '', email: '', linkedin_url: '', location: '',
+           work_experience: [], education: [], skills: [] }
+}
+
+function insertDescriptionAt(d: string[], fi: number): string[] {
+  const n = [...d]; n.splice(fi, 0, ''); return n
+}
+
+function deleteDescriptionAt(d: string[], fi: number): string[] {
+  const n = [...d]; n.splice(fi, 1); return n
+}
+
+function descriptionRangeForCompany(rd: ResumeData, ci: number): [number, number] {
+  const start = flatIndex(rd, ci, 0)
+  return [start, start + rd.work_experience[ci].positions.length]
+}
+
 function SectionBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-8">
@@ -29,6 +47,9 @@ function SectionBlock({ title, children }: { title: string; children: React.Reac
     </div>
   )
 }
+
+const inputCls = "w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-transparent"
+const dashedBtnCls = "mt-3 w-full py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors"
 
 export default function Home() {
   const [step, setStep] = useState<Step>('upload')
@@ -140,6 +161,159 @@ export default function Home() {
     })
   }
 
+  const handleStartFromScratch = () => {
+    setResumeData(blankResumeData())
+    setDescriptions([])
+    setSelection({ work_experience: [], education: [], skills: [] })
+    setFile(null)
+    setError(null)
+    setStep('describe')
+  }
+
+  const updateHeader = (field: keyof Pick<ResumeData, 'name' | 'phone' | 'email' | 'linkedin_url' | 'location'>, value: string) =>
+    setResumeData(prev => prev ? { ...prev, [field]: value } : prev)
+
+  const updateCompany = (ci: number, field: 'company' | 'location', value: string) =>
+    setResumeData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        work_experience: prev.work_experience.map((c, i) =>
+          i === ci ? { ...c, [field]: value } : c
+        )
+      }
+    })
+
+  const deleteCompany = (ci: number) => {
+    if (!resumeData || !selection) return
+    const [start, end] = descriptionRangeForCompany(resumeData, ci)
+    setDescriptions(prev => {
+      const n = [...prev]
+      n.splice(start, end - start)
+      return n
+    })
+    setSelection(prev => {
+      if (!prev) return prev
+      return { ...prev, work_experience: prev.work_experience.filter((_, i) => i !== ci) }
+    })
+    setResumeData(prev => {
+      if (!prev) return prev
+      return { ...prev, work_experience: prev.work_experience.filter((_, i) => i !== ci) }
+    })
+  }
+
+  const addCompany = () => {
+    setDescriptions(prev => [...prev, ''])
+    setSelection(prev => prev ? { ...prev, work_experience: [...prev.work_experience, [true]] } : prev)
+    setResumeData(prev => prev ? {
+      ...prev,
+      work_experience: [...prev.work_experience, {
+        company: '',
+        location: '',
+        positions: [{ title: '', start_date: '', end_date: '', location: '', linkedin_description: '' }]
+      }]
+    } : prev)
+  }
+
+  const addPosition = (ci: number) => {
+    if (!resumeData) return
+    const fi = flatIndex(resumeData, ci, resumeData.work_experience[ci].positions.length)
+    setDescriptions(prev => insertDescriptionAt(prev, fi))
+    setSelection(prev => {
+      if (!prev) return prev
+      const we = prev.work_experience.map((row, i) => i === ci ? [...row, true] : row)
+      return { ...prev, work_experience: we }
+    })
+    setResumeData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        work_experience: prev.work_experience.map((c, i) =>
+          i === ci ? {
+            ...c,
+            positions: [...c.positions, { title: '', start_date: '', end_date: '', location: '', linkedin_description: '' }]
+          } : c
+        )
+      }
+    })
+  }
+
+  const deletePosition = (ci: number, pi: number) => {
+    if (!resumeData) return
+    if (resumeData.work_experience[ci].positions.length === 1) {
+      deleteCompany(ci)
+      return
+    }
+    const fi = flatIndex(resumeData, ci, pi)
+    setDescriptions(prev => deleteDescriptionAt(prev, fi))
+    setSelection(prev => {
+      if (!prev) return prev
+      const we = prev.work_experience.map((row, i) => i === ci ? row.filter((_, j) => j !== pi) : row)
+      return { ...prev, work_experience: we }
+    })
+    setResumeData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        work_experience: prev.work_experience.map((c, i) =>
+          i === ci ? { ...c, positions: c.positions.filter((_, j) => j !== pi) } : c
+        )
+      }
+    })
+  }
+
+  const updatePosition = (ci: number, pi: number, field: keyof Omit<Position, 'linkedin_description'>, value: string) =>
+    setResumeData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        work_experience: prev.work_experience.map((c, i) =>
+          i === ci ? {
+            ...c,
+            positions: c.positions.map((p, j) => j === pi ? { ...p, [field]: value } : p)
+          } : c
+        )
+      }
+    })
+
+  const addEducation = () => {
+    setSelection(prev => prev ? { ...prev, education: [...prev.education, true] } : prev)
+    setResumeData(prev => prev ? {
+      ...prev,
+      education: [...prev.education, { school: '', degree: '', start_date: '', end_date: '', location: '' }]
+    } : prev)
+  }
+
+  const deleteEducation = (i: number) => {
+    setSelection(prev => prev ? { ...prev, education: prev.education.filter((_, j) => j !== i) } : prev)
+    setResumeData(prev => prev ? { ...prev, education: prev.education.filter((_, j) => j !== i) } : prev)
+  }
+
+  const updateEducation = (i: number, field: keyof Education, value: string) =>
+    setResumeData(prev => prev ? {
+      ...prev,
+      education: prev.education.map((e, j) => j === i ? { ...e, [field]: value } : e)
+    } : prev)
+
+  const addSkill = () => {
+    setSelection(prev => prev ? { ...prev, skills: [...prev.skills, true] } : prev)
+    setResumeData(prev => prev ? {
+      ...prev,
+      skills: [...prev.skills, { category: '', skills: '' }]
+    } : prev)
+  }
+
+  const deleteSkill = (i: number) => {
+    setSelection(prev => prev ? { ...prev, skills: prev.skills.filter((_, j) => j !== i) } : prev)
+    setResumeData(prev => prev ? { ...prev, skills: prev.skills.filter((_, j) => j !== i) } : prev)
+  }
+
+  const updateSkill = (i: number, field: keyof SkillCategory, value: string) =>
+    setResumeData(prev => prev ? {
+      ...prev,
+      skills: prev.skills.map((s, j) => j === i ? { ...s, [field]: value } : s)
+    } : prev)
+
   const handleGenerate = async () => {
     if (!resumeData || !selection) return
     setGenerating(true)
@@ -202,6 +376,9 @@ export default function Home() {
     setError(null)
   }
 
+  const isManualEntry = !resumeData?.work_experience.some(c =>
+    c.positions.some(p => p.linkedin_description))
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -213,7 +390,7 @@ export default function Home() {
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Resume Generator</h1>
           <p className="text-gray-500 text-lg">
-            Upload your LinkedIn PDF export and get a polished LaTeX resume in seconds.
+            Upload your LinkedIn PDF or build your CV from scratch.
           </p>
         </div>
 
@@ -291,6 +468,20 @@ export default function Home() {
                 'Extract from LinkedIn'
               )}
             </button>
+
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-gray-400 text-xs">or</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
+            <button
+              onClick={handleStartFromScratch}
+              className="mt-4 w-full py-3 px-6 rounded-xl font-semibold text-gray-700 text-base
+                border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            >
+              Start from scratch
+            </button>
           </>
         )}
 
@@ -300,11 +491,50 @@ export default function Home() {
         {step === 'describe' && resumeData && selection && (
           <>
             <p className="text-gray-500 text-sm mb-6">
-              Describe what you did in each role — Claude will turn your notes into polished bullet
-              points. Leave a field blank and it will infer from the job title. Anything Claude
-              already found on your LinkedIn profile is shown in grey. Uncheck any item to exclude it
-              from the resume.
+              {isManualEntry
+                ? 'Fill in your details below.'
+                : 'Describe what you did in each role — Claude will turn your notes into polished bullet points. Leave a field blank and it will infer from the job title. Anything Claude already found on your LinkedIn profile is shown in grey. Uncheck any item to exclude it from the resume.'}
             </p>
+
+            {/* Personal Details */}
+            <SectionBlock title="Personal Details">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-4 space-y-2">
+                <input
+                  className={inputCls}
+                  value={resumeData.name}
+                  onChange={e => updateHeader('name', e.target.value)}
+                  placeholder="Full name"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className={inputCls}
+                    value={resumeData.email}
+                    onChange={e => updateHeader('email', e.target.value)}
+                    placeholder="Email"
+                  />
+                  <input
+                    className={inputCls}
+                    value={resumeData.phone}
+                    onChange={e => updateHeader('phone', e.target.value)}
+                    placeholder="Phone"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className={inputCls}
+                    value={resumeData.linkedin_url}
+                    onChange={e => updateHeader('linkedin_url', e.target.value)}
+                    placeholder="LinkedIn URL"
+                  />
+                  <input
+                    className={inputCls}
+                    value={resumeData.location}
+                    onChange={e => updateHeader('location', e.target.value)}
+                    placeholder="Location"
+                  />
+                </div>
+              </div>
+            </SectionBlock>
 
             {/* Work Experience */}
             <SectionBlock title="Work Experience">
@@ -314,11 +544,28 @@ export default function Home() {
                   className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
                 >
                   {/* Company header */}
-                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-                    <p className="font-semibold text-gray-900">{company.company}</p>
-                    {company.location && (
-                      <p className="text-gray-400 text-xs mt-0.5">{company.location}</p>
-                    )}
+                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-start gap-2">
+                    <div className="flex-1 space-y-1">
+                      <input
+                        className={`${inputCls} font-semibold text-gray-900`}
+                        value={company.company}
+                        onChange={e => updateCompany(ci, 'company', e.target.value)}
+                        placeholder="Company name"
+                      />
+                      <input
+                        className={`${inputCls} text-xs text-gray-500`}
+                        value={company.location}
+                        onChange={e => updateCompany(ci, 'location', e.target.value)}
+                        placeholder="Location"
+                      />
+                    </div>
+                    <button
+                      onClick={() => deleteCompany(ci)}
+                      className="mt-0.5 text-gray-300 hover:text-red-400 transition-colors text-sm leading-none px-1 py-0.5"
+                      title="Remove company"
+                    >
+                      ✕
+                    </button>
                   </div>
 
                   {/* Positions */}
@@ -330,14 +577,31 @@ export default function Home() {
                         <div key={pi} className={`transition-opacity ${!enabled ? 'opacity-50' : ''}`}>
                           {/* Position header bar */}
                           <div className="relative px-5 py-3 bg-gray-50 border-b border-gray-100">
-                            <div className="flex flex-wrap items-baseline gap-x-2 pr-8">
-                              <span className="font-medium text-gray-800 text-sm">{pos.title}</span>
-                              {pos.location && (
-                                <span className="text-gray-400 text-xs">· {pos.location}</span>
-                              )}
-                              <span className="text-gray-400 text-xs ml-auto">
-                                {pos.start_date} – {pos.end_date}
-                              </span>
+                            <div className="grid grid-cols-2 gap-1.5 pr-10">
+                              <input
+                                className={`${inputCls} col-span-2 font-medium`}
+                                value={pos.title}
+                                onChange={e => updatePosition(ci, pi, 'title', e.target.value)}
+                                placeholder="Job title"
+                              />
+                              <input
+                                className={inputCls}
+                                value={pos.start_date}
+                                onChange={e => updatePosition(ci, pi, 'start_date', e.target.value)}
+                                placeholder="Start date"
+                              />
+                              <input
+                                className={inputCls}
+                                value={pos.end_date}
+                                onChange={e => updatePosition(ci, pi, 'end_date', e.target.value)}
+                                placeholder="End date"
+                              />
+                              <input
+                                className={`${inputCls} col-span-2`}
+                                value={pos.location}
+                                onChange={e => updatePosition(ci, pi, 'location', e.target.value)}
+                                placeholder="Location"
+                              />
                             </div>
                             <input
                               type="checkbox"
@@ -345,18 +609,26 @@ export default function Home() {
                               checked={enabled}
                               onChange={() => togglePosition(ci, pi)}
                             />
+                            <button
+                              onClick={() => deletePosition(ci, pi)}
+                              className={`absolute top-9 right-3.5 text-xs leading-none transition-colors px-0.5 ${
+                                company.positions.length === 1
+                                  ? 'text-gray-200'
+                                  : 'text-gray-300 hover:text-red-400'
+                              }`}
+                              title={company.positions.length === 1 ? 'Remove company' : 'Remove position'}
+                            >
+                              ✕
+                            </button>
                           </div>
 
                           {/* Position body */}
                           <div className="px-5 py-4">
-                            {/* LinkedIn description (context) */}
                             {enabled && pos.linkedin_description && (
                               <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
                                 {pos.linkedin_description}
                               </p>
                             )}
-
-                            {/* User description textarea */}
                             {enabled && (
                               <textarea
                                 className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
@@ -364,7 +636,7 @@ export default function Home() {
                                   focus:ring-blue-400 focus:border-transparent transition"
                                 rows={3}
                                 placeholder="Describe your responsibilities and achievements…"
-                                value={descriptions[fi]}
+                                value={descriptions[fi] ?? ''}
                                 onChange={(e) => setDescription(fi, e.target.value)}
                               />
                             )}
@@ -373,64 +645,142 @@ export default function Home() {
                       )
                     })}
                   </div>
+
+                  {/* Add position button */}
+                  <button
+                    onClick={() => addPosition(ci)}
+                    className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors border-t border-dashed border-gray-100"
+                  >
+                    + Add position
+                  </button>
                 </div>
               ))}
             </SectionBlock>
 
+            {/* Add company button */}
+            <button onClick={addCompany} className={dashedBtnCls}>
+              + Add company
+            </button>
+
             {/* Education */}
-            {resumeData.education.length > 0 && (
-              <SectionBlock title="Education">
-                {resumeData.education.map((edu, i) => {
-                  const enabled = selection.education[i] ?? true
-                  return (
-                    <div
-                      key={i}
-                      className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 flex items-start justify-between gap-4 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">{edu.school}</p>
-                        <p className="text-sm text-gray-500">{edu.degree}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {edu.start_date} – {edu.end_date}{edu.location ? ` · ${edu.location}` : ''}
-                        </p>
+            <SectionBlock title="Education">
+              {resumeData.education.map((edu, i) => {
+                const enabled = selection.education[i] ?? true
+                return (
+                  <div
+                    key={i}
+                    className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 space-y-1.5">
+                        <input
+                          className={`${inputCls} font-semibold text-gray-900`}
+                          value={edu.school}
+                          onChange={e => updateEducation(i, 'school', e.target.value)}
+                          placeholder="School"
+                        />
+                        <input
+                          className={inputCls}
+                          value={edu.degree}
+                          onChange={e => updateEducation(i, 'degree', e.target.value)}
+                          placeholder="Degree"
+                        />
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <input
+                            className={inputCls}
+                            value={edu.start_date}
+                            onChange={e => updateEducation(i, 'start_date', e.target.value)}
+                            placeholder="Start date"
+                          />
+                          <input
+                            className={inputCls}
+                            value={edu.end_date}
+                            onChange={e => updateEducation(i, 'end_date', e.target.value)}
+                            placeholder="End date"
+                          />
+                          <input
+                            className={`${inputCls} col-span-2`}
+                            value={edu.location}
+                            onChange={e => updateEducation(i, 'location', e.target.value)}
+                            placeholder="Location"
+                          />
+                        </div>
                       </div>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
-                        checked={enabled}
-                        onChange={() => toggleFlat('education', i)}
-                      />
+                      <div className="flex flex-col items-center gap-2 mt-0.5">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-blue-600 cursor-pointer flex-shrink-0"
+                          checked={enabled}
+                          onChange={() => toggleFlat('education', i)}
+                        />
+                        <button
+                          onClick={() => deleteEducation(i)}
+                          className="text-gray-300 hover:text-red-400 transition-colors text-xs leading-none"
+                          title="Remove education"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                  )
-                })}
-              </SectionBlock>
-            )}
+                  </div>
+                )
+              })}
+            </SectionBlock>
+
+            {/* Add education button */}
+            <button onClick={addEducation} className={dashedBtnCls}>
+              + Add education
+            </button>
 
             {/* Skills */}
-            {resumeData.skills.length > 0 && (
-              <SectionBlock title="Skills">
-                {resumeData.skills.map((cat, i) => {
-                  const enabled = selection.skills[i] ?? true
-                  return (
-                    <div
-                      key={i}
-                      className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 flex items-start justify-between gap-4 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">{cat.category}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{cat.skills}</p>
+            <SectionBlock title="Skills">
+              {resumeData.skills.map((cat, i) => {
+                const enabled = selection.skills[i] ?? true
+                return (
+                  <div
+                    key={i}
+                    className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 space-y-1.5">
+                        <input
+                          className={`${inputCls} font-semibold text-gray-900`}
+                          value={cat.category}
+                          onChange={e => updateSkill(i, 'category', e.target.value)}
+                          placeholder="Category (e.g. Languages)"
+                        />
+                        <input
+                          className={inputCls}
+                          value={cat.skills}
+                          onChange={e => updateSkill(i, 'skills', e.target.value)}
+                          placeholder="Skills (e.g. TypeScript, Python, Rust)"
+                        />
                       </div>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
-                        checked={enabled}
-                        onChange={() => toggleFlat('skills', i)}
-                      />
+                      <div className="flex flex-col items-center gap-2 mt-0.5">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-blue-600 cursor-pointer flex-shrink-0"
+                          checked={enabled}
+                          onChange={() => toggleFlat('skills', i)}
+                        />
+                        <button
+                          onClick={() => deleteSkill(i)}
+                          className="text-gray-300 hover:text-red-400 transition-colors text-xs leading-none"
+                          title="Remove skill category"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                  )
-                })}
-              </SectionBlock>
-            )}
+                  </div>
+                )
+              })}
+            </SectionBlock>
+
+            {/* Add skill button */}
+            <button onClick={addSkill} className={dashedBtnCls}>
+              + Add skill category
+            </button>
 
             <div className="mt-6 flex gap-3">
               <button
