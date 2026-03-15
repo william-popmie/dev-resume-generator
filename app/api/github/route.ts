@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       url: repo.html_url as string,
       language: (repo.language as string | null) ?? '',
       topics: (repo.topics as string[]) ?? [],
+      readme: '',
     }))
 
     return NextResponse.json(projects)
