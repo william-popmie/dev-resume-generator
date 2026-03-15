@@ -10,6 +10,9 @@ export async function POST(request: NextRequest) {
     const resumeData = ResumeDataSchema.parse(body.resumeData)
     const descriptions: string[] = Array.isArray(body.descriptions) ? body.descriptions : []
     const projects = z.array(GitHubProjectSchema).optional().default([]).parse(body.projects)
+    const projectNotes: Record<string, string> =
+      typeof body.projectNotes === 'object' && body.projectNotes !== null
+        ? body.projectNotes : {}
 
     // Convert flat descriptions array to Record<"company|||title", notes>
     const userNotes: Record<string, string> = {}
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     let projectBullets: Record<string, string[]> | undefined
     if (projects.length > 0) {
-      projectBullets = await generateProjectBullets(projects)
+      projectBullets = await generateProjectBullets(projects, projectNotes)
     }
 
     const pdfBuffer = await renderAndCompile(resumeData, bullets, projects.length > 0 ? projects : undefined, projectBullets)

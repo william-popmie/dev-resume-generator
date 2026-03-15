@@ -69,12 +69,16 @@ const PROJECT_BULLET_PROMPT = (
   description: string,
   language: string,
   topics: string[],
+  readme: string,
+  userNotes: string,
 ) => `
 You are writing resume bullet points for a software project called "${name}".
 
 Project description: ${description || "(none)"}
 Primary language: ${language || "(none)"}
 Topics/tags: ${topics.length > 0 ? topics.join(', ') : "(none)"}
+README excerpt: ${readme || "(none)"}
+Additional context from the candidate: ${userNotes || "(none)"}
 
 Write 3 concise, strong resume bullet points. Rules:
 - Start each with an action verb
@@ -86,6 +90,7 @@ Write 3 concise, strong resume bullet points. Rules:
 
 export async function generateProjectBullets(
   projects: GitHubProject[],
+  userNotes: Record<string, string> = {},
 ): Promise<ProjectBulletsMap> {
   const results: ProjectBulletsMap = {};
 
@@ -101,6 +106,8 @@ export async function generateProjectBullets(
             project.description,
             project.language,
             project.topics,
+            project.readme ?? '',
+            userNotes[project.name] ?? '',
           ),
         },
       ],

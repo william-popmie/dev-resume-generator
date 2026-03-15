@@ -50,5 +50,6 @@ export const GitHubProjectSchema = z.object({
   url: z.string(),
   language: z.string().optional().default(''),
   topics: z.array(z.string()).optional().default([]),
+  readme: z.string().optional().default(''),
 })
 export type GitHubProject = z.infer<typeof GitHubProjectSchema>

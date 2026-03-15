@@ -24,8 +24,8 @@ function buildMainTex(data: ResumeData, bullets: BulletsMap, hasProjects: boolea
 %----------HEADING----------
 ${buildHeader(data)}
 
-${hasProjects ? '\\input{sections/projects}\n' : ''}\\input{sections/experience}
-\\input{sections/education}
+\\input{sections/experience}
+${hasProjects ? '\\input{sections/projects}\n' : ''}\\input{sections/education}
 \\input{sections/skills}
 
 \\end{document}
