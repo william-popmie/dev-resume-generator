@@ -1,3 +1,8 @@
+\documentclass[letterpaper,11pt]{article}
+
+% utf8 input encoding — must come before fontenc
+\usepackage[utf8]{inputenc}
+
 %-------------------------
 % Resume Preamble
 % All packages, colors, fonts, and custom commands
@@ -39,9 +44,9 @@
   \llap{\contour{white}{#1}}%
 }
 
-% custom font: helvetica-style
-\usepackage{tgheros}
-\renewcommand*\familydefault{\sfdefault}
+% custom font: serif (classical/formal)
+\usepackage{lmodern}
+\renewcommand*\familydefault{\rmdefault}
 \usepackage[T1]{fontenc}
 
 % page style
@@ -117,3 +122,20 @@
 \newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0pt}}
 
 \color{text-grey}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\pagestyle{fancy}
+
+%%HEADER%%
+
+%%EXPERIENCE%%
+
+%%EDUCATION%%
+
+%%SKILLS%%
+
+\end{document}

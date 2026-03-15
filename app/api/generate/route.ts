@@ -20,8 +20,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const template: string = typeof body.template === 'string' ? body.template : 'formal'
     const bullets = await generateBullets(resumeData, userNotes)
-    const pdfBuffer = await renderAndCompile(resumeData, bullets)
+    const pdfBuffer = await renderAndCompile(resumeData, bullets, template)
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
