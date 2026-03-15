@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, DragEvent, ChangeEvent } from 'react'
+import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react'
 import type { ResumeData } from '@/lib/extractor'
+import type { GitHubProject } from '@/lib/types'
 
 type Step = 'upload' | 'describe' | 'download'
 
@@ -40,13 +41,20 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [githubUrl, setGithubUrl] = useState('')
+  const [availableProjects, setAvailableProjects] = useState<GitHubProject[]>([])
+  const [projectSelection, setProjectSelection] = useState<Set<string>>(new Set())
+  const [fetchingRepos, setFetchingRepos] = useState(false)
+  const [repoError, setRepoError] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Step 2
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
-  // Flat array — one entry per position across all companies
   const [descriptions, setDescriptions] = useState<string[]>([])
   const [selection, setSelection] = useState<SelectionState | null>(null)
+  const [selectedProjects, setSelectedProjects] = useState<GitHubProject[]>([])
+  const [projectNotes, setProjectNotes] = useState<Record<string, string>>({})
   const [generating, setGenerating] = useState(false)
 
   // Step 3
@@ -56,8 +64,53 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
 
   // -------------------------------------------------------------------------
-  // Step 1
+  // Step 1 — debounced GitHub repo fetch
   // -------------------------------------------------------------------------
+
+  const parseGithubUsername = (input: string): string => {
+    const trimmed = input.trim()
+    if (!trimmed) return ''
+    const match = trimmed.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([^/\s]+)/)
+    return match ? match[1] : trimmed
+  }
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const username = parseGithubUsername(githubUrl)
+    if (!username) {
+      setAvailableProjects([])
+      setProjectSelection(new Set())
+      setRepoError(null)
+      setFetchingRepos(false)
+      return
+    }
+    setFetchingRepos(true)
+    setRepoError(null)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/github', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          setRepoError((d as { error?: string }).error ?? `GitHub error: ${res.status}`)
+          setAvailableProjects([])
+          setProjectSelection(new Set())
+        } else {
+          const projects: GitHubProject[] = await res.json()
+          setAvailableProjects(projects)
+          setProjectSelection(new Set())
+        }
+      } catch {
+        setRepoError('Failed to fetch repositories')
+      } finally {
+        setFetchingRepos(false)
+      }
+    }, 500)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [githubUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setFileIfPdf = (f: File) => {
     if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
@@ -89,14 +142,26 @@ export default function Home() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/extract', { method: 'POST', body: formData })
+      const username = parseGithubUsername(githubUrl)
+      const selected = availableProjects.filter(p => projectSelection.has(p.name))
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? `Server error: ${response.status}`)
+      const extractPromise = fetch('/api/extract', { method: 'POST', body: formData })
+      const contextPromise = username && selected.length > 0
+        ? fetch('/api/github/context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, projects: selected }),
+          })
+        : null
+
+      const [extractResponse, contextResponse] = await Promise.all([extractPromise, contextPromise])
+
+      if (!extractResponse.ok) {
+        const data = await extractResponse.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? `Server error: ${extractResponse.status}`)
       }
 
-      const data: ResumeData = await response.json()
+      const data: ResumeData = await extractResponse.json()
       const totalPositions = data.work_experience.reduce((acc, c) => acc + c.positions.length, 0)
       setResumeData(data)
       setDescriptions(Array(totalPositions).fill(''))
@@ -105,6 +170,17 @@ export default function Home() {
         education: data.education.map(() => true),
         skills: data.skills.map(() => true),
       })
+
+      let enriched = selected
+      if (contextResponse) {
+        if (contextResponse.ok) {
+          enriched = await contextResponse.json()
+        }
+        // If context fetch fails, fall back to non-enriched selected projects
+      }
+      setSelectedProjects(enriched)
+      setProjectNotes({})
+
       setStep('describe')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
@@ -131,6 +207,14 @@ export default function Home() {
       const we = prev.work_experience.map(row => [...row])
       we[ci][pi] = !we[ci][pi]
       return { ...prev, work_experience: we }
+    })
+  }
+
+  const toggleProject = (name: string) => {
+    setProjectSelection(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
     })
   }
 
@@ -170,10 +254,18 @@ export default function Home() {
         })
       )
 
+      const filteredProjects = selectedProjects.filter(p => projectSelection.has(p.name))
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeData: filteredResumeData, descriptions: filteredDescriptions, template }),
+        body: JSON.stringify({
+          resumeData: filteredResumeData,
+          descriptions: filteredDescriptions,
+          projects: filteredProjects,
+          projectNotes,
+          template
+        }),
       })
 
       if (!response.ok) {
@@ -203,6 +295,12 @@ export default function Home() {
     setSelection(null)
     setDownloadUrl(null)
     setError(null)
+    setGithubUrl('')
+    setAvailableProjects([])
+    setProjectSelection(new Set())
+    setSelectedProjects([])
+    setProjectNotes({})
+    setRepoError(null)
   }
 
   // -------------------------------------------------------------------------
@@ -298,9 +396,59 @@ export default function Home() {
               )}
             </div>
 
+            <input
+              type="text"
+              placeholder="https://github.com/username (optional)"
+              value={githubUrl}
+              onChange={e => setGithubUrl(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+            />
+
+            {/* Repo list */}
+            {(fetchingRepos || availableProjects.length > 0 || repoError) && (
+              <div className="mt-3">
+                {fetchingRepos && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 px-1">
+                    <svg className="animate-spin h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Fetching repositories…
+                  </div>
+                )}
+                {repoError && (
+                  <p className="text-sm text-red-500 px-1">{repoError}</p>
+                )}
+                {availableProjects.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between px-1 mb-1.5">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select repositories to include</span>
+                      <span className="text-xs text-gray-400">{projectSelection.size} selected</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl bg-white divide-y divide-gray-100">
+                      {availableProjects.map(proj => (
+                        <label key={proj.name} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-blue-600 cursor-pointer flex-shrink-0"
+                            checked={projectSelection.has(proj.name)}
+                            onChange={() => toggleProject(proj.name)}
+                          />
+                          <span className="font-medium text-sm text-gray-800 flex-1 min-w-0 truncate">{proj.name}</span>
+                          {proj.language && (
+                            <span className="text-xs text-gray-400 flex-shrink-0">{proj.language}</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleExtract}
-              disabled={!file || extracting}
+              disabled={!file || extracting || fetchingRepos}
               className="mt-6 w-full py-3.5 px-6 rounded-xl font-semibold text-white text-lg transition-all
                 bg-blue-600 hover:bg-blue-700 active:bg-blue-800
                 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:text-gray-500"
@@ -311,10 +459,18 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Extracting from LinkedIn…
+                  Extracting…
+                </span>
+              ) : fetchingRepos ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Fetching repositories…
                 </span>
               ) : (
-                'Extract from LinkedIn'
+                'Extract Data'
               )}
             </button>
           </>
@@ -375,14 +531,11 @@ export default function Home() {
 
                           {/* Position body */}
                           <div className="px-5 py-4">
-                            {/* LinkedIn description (context) */}
                             {enabled && pos.linkedin_description && (
                               <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
                                 {pos.linkedin_description}
                               </p>
                             )}
-
-                            {/* User description textarea */}
                             {enabled && (
                               <textarea
                                 className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
@@ -458,9 +611,71 @@ export default function Home() {
               </SectionBlock>
             )}
 
+            {/* GitHub Projects */}
+            {selectedProjects.length > 0 && (
+              <SectionBlock title="GitHub Projects">
+                {selectedProjects.map((proj) => {
+                  const enabled = projectSelection.has(proj.name)
+                  const tags = [proj.language, ...(proj.topics ?? [])].filter(Boolean).join(' · ')
+                  return (
+                    <div
+                      key={proj.name}
+                      className={`bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-opacity ${!enabled ? 'opacity-50' : ''}`}
+                    >
+                      {/* Project header */}
+                      <div className="relative px-5 py-3 bg-gray-50 border-b border-gray-100">
+                        <div className="pr-8">
+                          <a
+                            href={proj.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors"
+                          >
+                            {proj.name}
+                          </a>
+                          {tags && <p className="text-xs text-gray-400 mt-0.5">{tags}</p>}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="absolute top-3 right-4 h-4 w-4 accent-blue-600 cursor-pointer flex-shrink-0"
+                          checked={enabled}
+                          onChange={() => toggleProject(proj.name)}
+                        />
+                      </div>
+
+                      {/* Project body */}
+                      {enabled && (
+                        <div className="px-5 py-4">
+                          {(proj.description || proj.readme) && (
+                            <p className="text-xs text-gray-400 italic mb-2 leading-relaxed">
+                              {proj.description}
+                              {proj.readme && `${proj.description ? ' — ' : ''}${proj.readme.slice(0, 300)}…`}
+                            </p>
+                          )}
+                          <textarea
+                            className="w-full rounded-lg border border-gray-200 p-3 text-sm text-gray-800
+                              placeholder-gray-400 resize-none focus:outline-none focus:ring-2
+                              focus:ring-blue-400 focus:border-transparent transition"
+                            rows={3}
+                            placeholder="Describe what makes this project notable, technical challenges solved…"
+                            value={projectNotes[proj.name] ?? ''}
+                            onChange={(e) => setProjectNotes(prev => ({ ...prev, [proj.name]: e.target.value }))}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </SectionBlock>
+            )}
+
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => { setStep('upload'); setError(null) }}
+                onClick={() => {
+                  setSelectedProjects([])
+                  setStep('upload')
+                  setError(null)
+                }}
                 className="flex-1 py-3.5 px-6 rounded-xl font-semibold text-gray-700 text-lg
                   border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors"
               >

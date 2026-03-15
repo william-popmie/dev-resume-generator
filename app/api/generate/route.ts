@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ResumeDataSchema } from '@/lib/types'
-import { generateBullets } from '@/lib/generator'
+import { z } from 'zod'
+import { ResumeDataSchema, GitHubProjectSchema } from '@/lib/types'
+import { generateBullets, generateProjectBullets } from '@/lib/generator'
 import { renderAndCompile } from '@/lib/renderer'
 
 export async function POST(request: NextRequest) {
@@ -8,6 +9,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const resumeData = ResumeDataSchema.parse(body.resumeData)
     const descriptions: string[] = Array.isArray(body.descriptions) ? body.descriptions : []
+    const projects = z.array(GitHubProjectSchema).optional().default([]).parse(body.projects)
+    const projectNotes: Record<string, string> =
+      typeof body.projectNotes === 'object' && body.projectNotes !== null
+        ? body.projectNotes : {}
 
     // Convert flat descriptions array to Record<"company|||title", notes>
     const userNotes: Record<string, string> = {}
@@ -22,7 +27,13 @@ export async function POST(request: NextRequest) {
 
     const template: string = typeof body.template === 'string' ? body.template : 'formal'
     const bullets = await generateBullets(resumeData, userNotes)
-    const pdfBuffer = await renderAndCompile(resumeData, bullets, template)
+
+    let projectBullets: Record<string, string[]> | undefined
+    if (projects.length > 0) {
+      projectBullets = await generateProjectBullets(projects, projectNotes)
+    }
+
+    const pdfBuffer = await renderAndCompile(resumeData, bullets, template, projects.length > 0 ? projects : undefined, projectBullets)
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,

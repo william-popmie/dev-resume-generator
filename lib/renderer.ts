@@ -2,23 +2,28 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import type { ResumeData } from "./types";
-import type { BulletsMap } from "./latex/sections";
-import { buildHeader, buildExperience, buildEducation, buildSkills } from "./latex/sections";
+import type { ResumeData, GitHubProject } from "./types";
+import type { BulletsMap, ProjectBulletsMap } from "./latex/sections";
+import { buildHeader, buildExperience, buildEducation, buildSkills, buildProjects } from "./latex/sections";
 
 export async function renderAndCompile(
   data: ResumeData,
   bullets: BulletsMap,
   template: string = 'formal',
+  projects?: GitHubProject[],
+  projectBullets?: ProjectBulletsMap,
 ): Promise<Buffer> {
   const templateFile = path.join(process.cwd(), `latex-templates/${template}-template/template.tex`);
   const tmpDir = path.join(os.tmpdir(), `resume-${crypto.randomUUID()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
+  const hasProjects = (projects?.length ?? 0) > 0;
+
   try {
     let tex = fs.readFileSync(templateFile, "utf8");
     tex = tex.replace("%%HEADER%%", buildHeader(data));
     tex = tex.replace("%%EXPERIENCE%%", buildExperience(data, bullets));
+    tex = tex.replace("%%PROJECTS%%", hasProjects ? buildProjects(projects!, projectBullets ?? {}) : "");
     tex = tex.replace("%%EDUCATION%%", buildEducation(data));
     tex = tex.replace("%%SKILLS%%", buildSkills(data));
 
