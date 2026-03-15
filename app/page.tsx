@@ -34,6 +34,9 @@ function SectionBlock({ title, children }: { title: string; children: React.Reac
 export default function Home() {
   const [step, setStep] = useState<Step>('upload')
 
+  // Template selection
+  const [template, setTemplate] = useState<'formal' | 'modern'>('formal')
+
   // Step 1
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -261,6 +264,7 @@ export default function Home() {
           descriptions: filteredDescriptions,
           projects: filteredProjects,
           projectNotes,
+          template
         }),
       })
 
@@ -319,6 +323,29 @@ export default function Home() {
         {/* ------------------------------------------------------------------ */}
         {step === 'upload' && (
           <>
+            {/* Template picker */}
+            <div className="mb-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Choose a template</p>
+              <div className="grid grid-cols-2 gap-3">
+                {(['formal', 'modern'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTemplate(t)}
+                    className={`rounded-xl border-2 px-5 py-4 text-left transition-all ${
+                      template === t
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <p className="font-semibold text-gray-900 capitalize">{t}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {t === 'formal' ? 'Serif · Classic' : 'Sans-serif · Modern'}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div
               role="button"
               tabIndex={0}

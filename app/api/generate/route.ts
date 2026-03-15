@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const template: string = typeof body.template === 'string' ? body.template : 'formal'
     const bullets = await generateBullets(resumeData, userNotes)
 
     let projectBullets: Record<string, string[]> | undefined
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       projectBullets = await generateProjectBullets(projects, projectNotes)
     }
 
-    const pdfBuffer = await renderAndCompile(resumeData, bullets, projects.length > 0 ? projects : undefined, projectBullets)
+    const pdfBuffer = await renderAndCompile(resumeData, bullets, template, projects.length > 0 ? projects : undefined, projectBullets)
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
