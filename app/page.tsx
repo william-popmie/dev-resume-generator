@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react'
 import type { ResumeData } from '@/lib/extractor'
-import type { GitHubProject, Position } from '@/lib/types'
+import type { GitHubProject, Position, Education } from '@/lib/types'
 
 type Step = 'upload' | 'describe' | 'download'
 
