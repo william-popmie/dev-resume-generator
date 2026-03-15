@@ -1,7 +1,5 @@
 'use client'
 
-import { useState, useRef, DragEvent, ChangeEvent } from 'react'
-import type { ResumeData, Company, Position, Education, SkillCategory } from '@/lib/types'
 import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react'
 import type { ResumeData } from '@/lib/extractor'
 import type { GitHubProject } from '@/lib/types'
