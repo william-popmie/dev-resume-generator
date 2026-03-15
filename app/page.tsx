@@ -2,6 +2,7 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
 import type { ResumeData } from '@/lib/extractor'
+import type { GitHubProject } from '@/lib/types'
 
 type Step = 'upload' | 'describe' | 'download'
 
@@ -37,6 +38,10 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [githubUrl, setGithubUrl] = useState('')
+  const [githubProjects, setGithubProjects] = useState<GitHubProject[]>([])
+  const [projectSelection, setProjectSelection] = useState<boolean[]>([])
+  const [fetchingGithub, setFetchingGithub] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Step 2
@@ -77,6 +82,14 @@ export default function Home() {
     if (selected) setFileIfPdf(selected)
   }
 
+  const parseGithubUsername = (input: string): string => {
+    const trimmed = input.trim()
+    if (!trimmed) return ''
+    // Accept full URL like https://github.com/username or just username
+    const match = trimmed.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([^/\s]+)/)
+    return match ? match[1] : trimmed
+  }
+
   const handleExtract = async () => {
     if (!file) return
     setExtracting(true)
@@ -86,14 +99,25 @@ export default function Home() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/extract', { method: 'POST', body: formData })
+      const extractPromise = fetch('/api/extract', { method: 'POST', body: formData })
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? `Server error: ${response.status}`)
+      const username = parseGithubUsername(githubUrl)
+      const githubPromise = username
+        ? fetch('/api/github', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username }),
+          })
+        : null
+
+      const [extractResponse, githubResponse] = await Promise.all([extractPromise, githubPromise])
+
+      if (!extractResponse.ok) {
+        const data = await extractResponse.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? `Server error: ${extractResponse.status}`)
       }
 
-      const data: ResumeData = await response.json()
+      const data: ResumeData = await extractResponse.json()
       const totalPositions = data.work_experience.reduce((acc, c) => acc + c.positions.length, 0)
       setResumeData(data)
       setDescriptions(Array(totalPositions).fill(''))
@@ -102,6 +126,21 @@ export default function Home() {
         education: data.education.map(() => true),
         skills: data.skills.map(() => true),
       })
+
+      if (githubResponse) {
+        if (githubResponse.ok) {
+          const projects: GitHubProject[] = await githubResponse.json()
+          setGithubProjects(projects)
+          setProjectSelection(projects.map(() => true))
+        } else {
+          const errData = await githubResponse.json().catch(() => ({}))
+          const msg = (errData as { error?: string }).error ?? `GitHub error: ${githubResponse.status}`
+          setError(msg)
+          setGithubProjects([])
+          setProjectSelection([])
+        }
+      }
+
       setStep('describe')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.')
@@ -128,6 +167,14 @@ export default function Home() {
       const we = prev.work_experience.map(row => [...row])
       we[ci][pi] = !we[ci][pi]
       return { ...prev, work_experience: we }
+    })
+  }
+
+  const toggleProject = (i: number) => {
+    setProjectSelection(prev => {
+      const next = [...prev]
+      next[i] = !next[i]
+      return next
     })
   }
 
@@ -167,10 +214,16 @@ export default function Home() {
         })
       )
 
+      const selectedProjects = githubProjects.filter((_, i) => projectSelection[i] ?? true)
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeData: filteredResumeData, descriptions: filteredDescriptions }),
+        body: JSON.stringify({
+          resumeData: filteredResumeData,
+          descriptions: filteredDescriptions,
+          projects: selectedProjects,
+        }),
       })
 
       if (!response.ok) {
@@ -200,6 +253,9 @@ export default function Home() {
     setSelection(null)
     setDownloadUrl(null)
     setError(null)
+    setGithubUrl('')
+    setGithubProjects([])
+    setProjectSelection([])
   }
 
   // -------------------------------------------------------------------------
@@ -271,6 +327,14 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            <input
+              type="text"
+              placeholder="https://github.com/username (optional)"
+              value={githubUrl}
+              onChange={e => setGithubUrl(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+            />
 
             <button
               onClick={handleExtract}
@@ -425,6 +489,36 @@ export default function Home() {
                         className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
                         checked={enabled}
                         onChange={() => toggleFlat('skills', i)}
+                      />
+                    </div>
+                  )
+                })}
+              </SectionBlock>
+            )}
+
+            {/* GitHub Projects */}
+            {githubProjects.length > 0 && (
+              <SectionBlock title="GitHub Projects">
+                {githubProjects.map((proj, i) => {
+                  const enabled = projectSelection[i] ?? true
+                  const tags = [proj.language, ...(proj.topics ?? [])].filter(Boolean).join(' · ')
+                  return (
+                    <div
+                      key={i}
+                      className={`bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-3 flex items-start justify-between gap-4 transition-opacity ${!enabled ? 'opacity-40' : ''}`}
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{proj.name}</p>
+                        {proj.description && (
+                          <p className="text-xs text-gray-500 mt-0.5">{proj.description}</p>
+                        )}
+                        {tags && <p className="text-xs text-gray-400 mt-0.5">{tags}</p>}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 mt-0.5 accent-blue-600 cursor-pointer flex-shrink-0"
+                        checked={enabled}
+                        onChange={() => toggleProject(i)}
                       />
                     </div>
                   )

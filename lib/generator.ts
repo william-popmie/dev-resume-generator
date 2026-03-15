@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ResumeData } from "./types";
-import type { BulletsMap } from "./latex/sections";
+import type { ResumeData, GitHubProject } from "./types";
+import type { BulletsMap, ProjectBulletsMap } from "./latex/sections";
 
 const client = new Anthropic();
 
@@ -59,6 +59,63 @@ export async function generateBullets(
 
       results[key] = bullets;
     }
+  }
+
+  return results;
+}
+
+const PROJECT_BULLET_PROMPT = (
+  name: string,
+  description: string,
+  language: string,
+  topics: string[],
+) => `
+You are writing resume bullet points for a software project called "${name}".
+
+Project description: ${description || "(none)"}
+Primary language: ${language || "(none)"}
+Topics/tags: ${topics.length > 0 ? topics.join(', ') : "(none)"}
+
+Write 3 concise, strong resume bullet points. Rules:
+- Start each with an action verb
+- Highlight technical skills, impact, or design decisions
+- Be specific, not generic
+- No markdown, no numbering — just one bullet per line, using plain text
+- Max 120 characters per bullet
+`;
+
+export async function generateProjectBullets(
+  projects: GitHubProject[],
+): Promise<ProjectBulletsMap> {
+  const results: ProjectBulletsMap = {};
+
+  for (const project of projects) {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      messages: [
+        {
+          role: "user",
+          content: PROJECT_BULLET_PROMPT(
+            project.name,
+            project.description,
+            project.language,
+            project.topics,
+          ),
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+
+    const bullets = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+      .slice(0, 3);
+
+    results[project.name] = bullets;
   }
 
   return results;
